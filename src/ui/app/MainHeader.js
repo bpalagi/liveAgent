@@ -10,6 +10,7 @@ export class MainHeader extends LitElement {
     static styles = css`
         :host {
             display: flex;
+            justify-content: center;
             transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.2s ease-out;
         }
 
@@ -661,15 +662,6 @@ export class MainHeader extends LitElement {
                     </div>
                     <div class="icon-container">
                         ${this.renderShortcut(this.shortcuts.nextStep)}
-                    </div>
-                </div>
-
-                <div class="header-actions" @click=${() => this._handleToggleAllWindowsVisibility()}>
-                    <div class="action-text">
-                        <div class="action-text-content">Show/Hide</div>
-                    </div>
-                    <div class="icon-container">
-                        ${this.renderShortcut(this.shortcuts.toggleVisibility)}
                     </div>
                 </div>
 
