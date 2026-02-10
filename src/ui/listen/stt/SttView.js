@@ -10,16 +10,12 @@ export class SttView extends LitElement {
         /* Inherit font styles from parent */
 
         .transcription-container {
-            overflow-y: auto;
-            padding: 12px 12px 16px 12px;
+            padding: 8px 12px 12px 12px;
             display: flex;
             flex-direction: column;
             gap: 8px;
-            min-height: 150px;
-            max-height: 600px;
             position: relative;
             z-index: 1;
-            flex: 1;
         }
 
         /* Visibility handled by parent component */
@@ -80,13 +76,11 @@ export class SttView extends LitElement {
 
     static properties = {
         sttMessages: { type: Array },
-        isVisible: { type: Boolean },
     };
 
     constructor() {
         super();
         this.sttMessages = [];
-        this.isVisible = true;
         this.messageIdCounter = 0;
         this._shouldScrollAfterUpdate = false;
 
@@ -204,10 +198,6 @@ export class SttView extends LitElement {
     }
 
     render() {
-        if (!this.isVisible) {
-            return html`<div style="display: none;"></div>`;
-        }
-
         return html`
             <div class="transcription-container">
                 ${this.sttMessages.length === 0

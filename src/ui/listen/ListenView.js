@@ -6,7 +6,7 @@ export class ListenView extends LitElement {
     static styles = css`
         :host {
             display: block;
-            width: 400px;
+            width: 720px;
             transform: translate3d(0, 0, 0);
             backface-visibility: hidden;
             transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.2s ease-out;
@@ -288,12 +288,82 @@ export class ListenView extends LitElement {
             font-size: 10px;
             color: rgba(255, 255, 255, 0.7);
         }
-        
+
+        .split-content {
+            display: flex;
+            flex-direction: row;
+            flex: 1;
+            min-height: 0;
+            max-height: 600px;
+        }
+
+        .pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            min-height: 0;
+        }
+
+        .pane-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            flex-shrink: 0;
+        }
+
+        .pane-label {
+            font-size: 10px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.45);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+
+        .pane-header-line {
+            flex: 1;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .pane-body {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+        }
+
+        .pane-body::-webkit-scrollbar {
+            width: 6px;
+        }
+        .pane-body::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 3px;
+        }
+        .pane-body::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+        .pane-body::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .vertical-divider {
+            width: 1px;
+            background: rgba(255, 255, 255, 0.1);
+            flex-shrink: 0;
+        }
+
         /* ────────────────[ GLASS BYPASS ]─────────────── */
         :host-context(body.has-glass) .assistant-container,
         :host-context(body.has-glass) .top-bar,
-        :host-context(body.has-glass) .toggle-button,
         :host-context(body.has-glass) .copy-button,
+        :host-context(body.has-glass) .split-content,
+        :host-context(body.has-glass) .pane,
+        :host-context(body.has-glass) .pane-header,
+        :host-context(body.has-glass) .pane-body,
+        :host-context(body.has-glass) .vertical-divider,
         :host-context(body.has-glass) .transcription-container,
         :host-context(body.has-glass) .insights-container,
         :host-context(body.has-glass) .stt-message,
@@ -316,7 +386,6 @@ export class ListenView extends LitElement {
             display: none !important;
         }
 
-        :host-context(body.has-glass) .toggle-button:hover,
         :host-context(body.has-glass) .copy-button:hover,
         :host-context(body.has-glass) .outline-item:hover,
         :host-context(body.has-glass) .request-item.clickable:hover,
@@ -325,12 +394,6 @@ export class ListenView extends LitElement {
             transform: none !important;
         }
 
-        :host-context(body.has-glass) .transcription-container::-webkit-scrollbar-track,
-        :host-context(body.has-glass) .transcription-container::-webkit-scrollbar-thumb,
-        :host-context(body.has-glass) .insights-container::-webkit-scrollbar-track,
-        :host-context(body.has-glass) .insights-container::-webkit-scrollbar-thumb {
-            background: transparent !important;
-        }
         :host-context(body.has-glass) * {
             animation: none !important;
             transition: none !important;
@@ -342,70 +405,6 @@ export class ListenView extends LitElement {
 
         :host-context(body.has-glass) .assistant-container,
         :host-context(body.has-glass) .stt-message,
-        :host-context(body.has-glass) .toggle-button,
-        :host-context(body.has-glass) .copy-button {
-            border-radius: 0 !important;
-        }
-
-        :host-context(body.has-glass) ::-webkit-scrollbar,
-        :host-context(body.has-glass) ::-webkit-scrollbar-track,
-        :host-context(body.has-glass) ::-webkit-scrollbar-thumb {
-            background: transparent !important;
-            width: 0 !important;      /* 스크롤바 자체 숨기기 */
-        }
-        :host-context(body.has-glass) .assistant-container,
-        :host-context(body.has-glass) .top-bar,
-        :host-context(body.has-glass) .toggle-button,
-        :host-context(body.has-glass) .copy-button,
-        :host-context(body.has-glass) .transcription-container,
-        :host-context(body.has-glass) .insights-container,
-        :host-context(body.has-glass) .stt-message,
-        :host-context(body.has-glass) .outline-item,
-        :host-context(body.has-glass) .request-item,
-        :host-context(body.has-glass) .markdown-content,
-        :host-context(body.has-glass) .insights-container pre,
-        :host-context(body.has-glass) .insights-container p code,
-        :host-context(body.has-glass) .insights-container pre code {
-            background: transparent !important;
-            border: none !important;
-            outline: none !important;
-            box-shadow: none !important;
-            filter: none !important;
-            backdrop-filter: none !important;
-        }
-
-        :host-context(body.has-glass) .assistant-container::before,
-        :host-context(body.has-glass) .assistant-container::after {
-            display: none !important;
-        }
-
-        :host-context(body.has-glass) .toggle-button:hover,
-        :host-context(body.has-glass) .copy-button:hover,
-        :host-context(body.has-glass) .outline-item:hover,
-        :host-context(body.has-glass) .request-item.clickable:hover,
-        :host-context(body.has-glass) .markdown-content:hover {
-            background: transparent !important;
-            transform: none !important;
-        }
-
-        :host-context(body.has-glass) .transcription-container::-webkit-scrollbar-track,
-        :host-context(body.has-glass) .transcription-container::-webkit-scrollbar-thumb,
-        :host-context(body.has-glass) .insights-container::-webkit-scrollbar-track,
-        :host-context(body.has-glass) .insights-container::-webkit-scrollbar-thumb {
-            background: transparent !important;
-        }
-        :host-context(body.has-glass) * {
-            animation: none !important;
-            transition: none !important;
-            transform: none !important;
-            filter: none !important;
-            backdrop-filter: none !important;
-            box-shadow: none !important;
-        }
-
-        :host-context(body.has-glass) .assistant-container,
-        :host-context(body.has-glass) .stt-message,
-        :host-context(body.has-glass) .toggle-button,
         :host-context(body.has-glass) .copy-button {
             border-radius: 0 !important;
         }
@@ -419,7 +418,6 @@ export class ListenView extends LitElement {
     `;
 
     static properties = {
-        viewMode: { type: String },
         isHovering: { type: Boolean },
         isAnimating: { type: Boolean },
         copyState: { type: String },
@@ -433,9 +431,10 @@ export class ListenView extends LitElement {
         super();
         this.isSessionActive = false;
         this.hasCompletedRecording = false;
-        this.viewMode = 'insights';
         this.isHovering = false;
         this.isAnimating = false;
+        this._shouldAutoFollow = true;
+        this._autoFollowThresholdPx = 80;
         this.elapsedTime = '00:00';
         this.captureStartTime = null;
         this.timerInterval = null;
@@ -445,6 +444,8 @@ export class ListenView extends LitElement {
         this.copyTimeout = null;
 
         this.adjustWindowHeight = this.adjustWindowHeight.bind(this);
+        this.handleSplitContentScroll = this.handleSplitContentScroll.bind(this);
+        this.handleSummaryUpdated = this.handleSummaryUpdated.bind(this);
     }
 
     connectedCallback() {
@@ -460,6 +461,7 @@ export class ListenView extends LitElement {
 
                 if (!wasActive && isActive) {
                     this.hasCompletedRecording = false;
+                    this._shouldAutoFollow = true;
                     this.startTimer();
                     // Reset child components
                     this.updateComplete.then(() => {
@@ -518,23 +520,22 @@ export class ListenView extends LitElement {
         this.updateComplete
             .then(() => {
                 const topBar = this.shadowRoot.querySelector('.top-bar');
-                const activeContent = this.viewMode === 'transcript'
-                    ? this.shadowRoot.querySelector('stt-view')
-                    : this.shadowRoot.querySelector('summary-view');
+                const paneHeaders = this.shadowRoot.querySelectorAll('.pane-header');
+                const summaryView = this.shadowRoot.querySelector('summary-view');
+                const sttView = this.shadowRoot.querySelector('stt-view');
 
-                if (!topBar || !activeContent) return;
+                if (!topBar) return;
 
                 const topBarHeight = topBar.offsetHeight;
+                const paneHeaderHeight = paneHeaders.length > 0 ? paneHeaders[0].offsetHeight : 0;
+                const summaryHeight = summaryView ? summaryView.scrollHeight : 0;
+                const sttHeight = sttView ? sttView.scrollHeight : 0;
 
-                const contentHeight = activeContent.scrollHeight;
-
-                const idealHeight = topBarHeight + contentHeight;
+                // Side-by-side: height is driven by the taller pane
+                const tallerPaneContent = Math.max(summaryHeight, sttHeight);
+                const idealHeight = topBarHeight + paneHeaderHeight + tallerPaneContent;
 
                 const targetHeight = Math.min(700, idealHeight);
-
-                console.log(
-                    `[Height Adjusted] Mode: ${this.viewMode}, TopBar: ${topBarHeight}px, Content: ${contentHeight}px, Ideal: ${idealHeight}px, Target: ${targetHeight}px`
-                );
 
                 window.api.listenView.adjustWindowHeight('listen', targetHeight);
             })
@@ -543,9 +544,48 @@ export class ListenView extends LitElement {
             });
     }
 
-    toggleViewMode() {
-        this.viewMode = this.viewMode === 'insights' ? 'transcript' : 'insights';
-        this.requestUpdate();
+    handleSplitContentScroll(event) {
+        const container = event?.target;
+        if (!container) return;
+
+        const threshold = this._autoFollowThresholdPx || 0;
+        const distanceFromBottom = container.scrollHeight - (container.scrollTop + container.clientHeight);
+        this._shouldAutoFollow = distanceFromBottom <= threshold;
+    }
+
+    scrollToLatestIfFollowing() {
+        if (!this._shouldAutoFollow) return;
+
+        const paneBodies = this.shadowRoot?.querySelectorAll('.pane-body');
+        const summaryView = this.shadowRoot?.querySelector('summary-view');
+        const sttView = this.shadowRoot?.querySelector('stt-view');
+        if (!paneBodies || paneBodies.length === 0) return;
+
+        const doScroll = () => {
+            if (!this._shouldAutoFollow) return;
+            paneBodies.forEach(pane => {
+                pane.scrollTop = pane.scrollHeight;
+            });
+        };
+
+        const waits = [];
+        if (summaryView && typeof summaryView.updateComplete?.then === 'function') {
+            waits.push(summaryView.updateComplete);
+        }
+        if (sttView && typeof sttView.updateComplete?.then === 'function') {
+            waits.push(sttView.updateComplete);
+        }
+
+        if (waits.length > 0) {
+            Promise.all(waits).then(() => requestAnimationFrame(doScroll));
+        } else {
+            requestAnimationFrame(doScroll);
+        }
+    }
+
+    handleSummaryUpdated(event) {
+        this.adjustWindowHeightThrottled();
+        this.scrollToLatestIfFollowing();
     }
 
     handleCopyHover(isHovering) {
@@ -561,14 +601,16 @@ export class ListenView extends LitElement {
     async handleCopy() {
         if (this.copyState === 'copied') return;
 
-        let textToCopy = '';
+        const summaryView = this.shadowRoot.querySelector('summary-view');
+        const sttView = this.shadowRoot.querySelector('stt-view');
+        const insightsText = summaryView ? summaryView.getSummaryText() : '';
+        const transcriptText = sttView ? sttView.getTranscriptText() : '';
 
-        if (this.viewMode === 'transcript') {
-            const sttView = this.shadowRoot.querySelector('stt-view');
-            textToCopy = sttView ? sttView.getTranscriptText() : '';
+        let textToCopy = '';
+        if (insightsText && transcriptText) {
+            textToCopy = `--- Insights ---\n${insightsText}\n\n--- Transcript ---\n${transcriptText}`;
         } else {
-            const summaryView = this.shadowRoot.querySelector('summary-view');
-            textToCopy = summaryView ? summaryView.getSummaryText() : '';
+            textToCopy = insightsText || transcriptText;
         }
 
         try {
@@ -607,30 +649,28 @@ export class ListenView extends LitElement {
 
     updated(changedProperties) {
         super.updated(changedProperties);
-
-        if (changedProperties.has('viewMode')) {
-            this.adjustWindowHeight();
-        }
     }
 
     handleSttMessagesUpdated(event) {
         // Handle messages update from SttView if needed
         this.adjustWindowHeightThrottled();
+        this.scrollToLatestIfFollowing();
     }
 
     firstUpdated() {
         super.firstUpdated();
-        setTimeout(() => this.adjustWindowHeight(), 200);
+        setTimeout(() => {
+            this.adjustWindowHeight();
+            this.scrollToLatestIfFollowing();
+        }, 200);
     }
 
     render() {
         const displayText = this.isHovering
-            ? this.viewMode === 'transcript'
-                ? 'Copy Transcript'
-                : 'Copy Glass Analysis'
-            : this.viewMode === 'insights'
-            ? `Live insights`
-            : `Glass is Listening ${this.elapsedTime}`;
+            ? 'Copy All'
+            : this.isSessionActive
+            ? `Glass is Listening ${this.elapsedTime}`
+            : `Live insights`;
 
         return html`
             <div class="assistant-container">
@@ -639,23 +679,6 @@ export class ListenView extends LitElement {
                         <span class="bar-left-text-content ${this.isAnimating ? 'slide-in' : ''}">${displayText}</span>
                     </div>
                     <div class="bar-controls">
-                        <button class="toggle-button" @click=${this.toggleViewMode}>
-                            ${this.viewMode === 'insights'
-                                ? html`
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
-                                          <circle cx="12" cy="12" r="3" />
-                                      </svg>
-                                      <span>Show Transcript</span>
-                                  `
-                                : html`
-                                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                          <path d="M9 11l3 3L22 4" />
-                                          <path d="M22 12v7a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h11" />
-                                      </svg>
-                                      <span>Show Insights</span>
-                                  `}
-                        </button>
                         <button
                             class="copy-button ${this.copyState === 'copied' ? 'copied' : ''}"
                             @click=${this.handleCopy}
@@ -673,15 +696,34 @@ export class ListenView extends LitElement {
                     </div>
                 </div>
 
-                <stt-view 
-                    .isVisible=${this.viewMode === 'transcript'}
-                    @stt-messages-updated=${this.handleSttMessagesUpdated}
-                ></stt-view>
+                <div class="split-content">
+                    <div class="pane">
+                        <div class="pane-header">
+                            <span class="pane-label">Insights</span>
+                            <span class="pane-header-line"></span>
+                        </div>
+                        <div class="pane-body" @scroll=${this.handleSplitContentScroll}>
+                            <summary-view
+                                @summary-updated=${this.handleSummaryUpdated}
+                                .hasCompletedRecording=${this.hasCompletedRecording}
+                            ></summary-view>
+                        </div>
+                    </div>
 
-                <summary-view 
-                    .isVisible=${this.viewMode === 'insights'}
-                    .hasCompletedRecording=${this.hasCompletedRecording}
-                ></summary-view>
+                    <div class="vertical-divider"></div>
+
+                    <div class="pane">
+                        <div class="pane-header">
+                            <span class="pane-label">Transcript</span>
+                            <span class="pane-header-line"></span>
+                        </div>
+                        <div class="pane-body" @scroll=${this.handleSplitContentScroll}>
+                            <stt-view
+                                @stt-messages-updated=${this.handleSttMessagesUpdated}
+                            ></stt-view>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
     }

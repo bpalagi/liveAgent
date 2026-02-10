@@ -712,7 +712,7 @@ class WhisperService extends EventEmitter {
 
         this.liveServerProcess.stderr.on('data', (data) => {
             const msg = data.toString().trim();
-            if (msg) console.log(`[WhisperLive-stderr] ${msg}`);
+            if (msg && !msg.includes('INFO:faster_whisper:')) console.log(`[WhisperLive-stderr] ${msg}`);
         });
 
         this.liveServerProcess.on('close', (code) => {

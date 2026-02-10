@@ -261,7 +261,8 @@ export class MainHeader extends LitElement {
             justify-content: center;
         }
 
-        .settings-button {
+        .settings-button,
+        .web-button {
             -webkit-app-region: no-drag;
             padding: 5px;
             border-radius: 50%;
@@ -275,18 +276,21 @@ export class MainHeader extends LitElement {
             gap: 6px;
         }
 
-        .settings-button:hover {
+        .settings-button:hover,
+        .web-button:hover {
             background: rgba(255, 255, 255, 0.1);
         }
 
-        .settings-icon {
+        .settings-icon,
+        .web-icon {
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 3px;
         }
 
-        .settings-icon svg {
+        .settings-icon svg,
+        .web-icon svg {
             width: 16px;
             height: 16px;
         }
@@ -294,7 +298,8 @@ export class MainHeader extends LitElement {
         :host-context(body.has-glass) .header,
         :host-context(body.has-glass) .listen-button,
         :host-context(body.has-glass) .header-actions,
-        :host-context(body.has-glass) .settings-button {
+        :host-context(body.has-glass) .settings-button,
+        :host-context(body.has-glass) .web-button {
             background: transparent !important;
             filter: none !important;
             box-shadow: none !important;
@@ -314,6 +319,7 @@ export class MainHeader extends LitElement {
 
         :host-context(body.has-glass) .header-actions:hover,
         :host-context(body.has-glass) .settings-button:hover,
+        :host-context(body.has-glass) .web-button:hover,
         :host-context(body.has-glass) .listen-button:hover::before {
             background: transparent !important;
         }
@@ -330,6 +336,7 @@ export class MainHeader extends LitElement {
         :host-context(body.has-glass) .listen-button,
         :host-context(body.has-glass) .header-actions,
         :host-context(body.has-glass) .settings-button,
+        :host-context(body.has-glass) .web-button,
         :host-context(body.has-glass) .icon-box {
             border-radius: 0 !important;
         }
@@ -588,6 +595,20 @@ export class MainHeader extends LitElement {
         }
     }
 
+    async _handleWebClick() {
+        if (this.wasJustDragged) return;
+        try {
+            if (window.api) {
+                const url = await window.api.mainHeader.getWebUrl();
+                if (url) {
+                    await window.api.common.openExternal(url);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to open web UI:', error);
+        }
+    }
+
 
     renderShortcut(accelerator) {
         if (!accelerator) return html``;
@@ -664,6 +685,20 @@ export class MainHeader extends LitElement {
                         ${this.renderShortcut(this.shortcuts.nextStep)}
                     </div>
                 </div>
+
+                <button
+                    class="web-button"
+                    @click=${this._handleWebClick}
+                    title="Open in browser"
+                >
+                    <div class="web-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="2" y1="12" x2="22" y2="12"/>
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                        </svg>
+                    </div>
+                </button>
 
                 <button 
                     class="settings-button"

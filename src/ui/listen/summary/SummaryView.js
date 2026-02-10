@@ -77,13 +77,9 @@ export class SummaryView extends LitElement {
         }
 
         .insights-container {
-            overflow-y: auto;
-            padding: 12px 16px 16px 16px;
+            padding: 12px 16px 8px 16px;
             position: relative;
             z-index: 1;
-            min-height: 150px;
-            max-height: 600px;
-            flex: 1;
         }
 
         /* Visibility handled by parent component */
@@ -235,7 +231,6 @@ export class SummaryView extends LitElement {
 
     static properties = {
         structuredData: { type: Object },
-        isVisible: { type: Boolean },
         hasCompletedRecording: { type: Boolean },
     };
 
@@ -247,7 +242,6 @@ export class SummaryView extends LitElement {
             actions: [],
             followUps: [],
         };
-        this.isVisible = true;
         this.hasCompletedRecording = false;
 
         // 마크다운 라이브러리 초기화
@@ -266,6 +260,13 @@ export class SummaryView extends LitElement {
             window.api.summaryView.onSummaryUpdate((event, data) => {
                 this.structuredData = data;
                 this.requestUpdate();
+                this.dispatchEvent(
+                    new CustomEvent('summary-updated', {
+                        detail: { structuredData: this.structuredData },
+                        bubbles: true,
+                        composed: true,
+                    })
+                );
             });
         }
     }
@@ -450,10 +451,6 @@ export class SummaryView extends LitElement {
     }
 
     render() {
-        if (!this.isVisible) {
-            return html`<div style="display: none;"></div>`;
-        }
-
         const data = this.structuredData || {
             summary: [],
             topic: { header: '', bullets: [] },

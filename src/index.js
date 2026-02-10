@@ -50,13 +50,9 @@ function setupProtocolHandling() {
     try {
         if (!app.isDefaultProtocolClient('pickleglass')) {
             const success = app.setAsDefaultProtocolClient('pickleglass');
-            if (success) {
-                console.log('[Protocol] Successfully set as default protocol client for pickleglass://');
-            } else {
+            if (!success) {
                 console.warn('[Protocol] Failed to set as default protocol client - this may affect deep linking');
             }
-        } else {
-            console.log('[Protocol] Already registered as default protocol client for pickleglass://');
         }
     } catch (error) {
         console.error('[Protocol] Error during protocol registration:', error);
@@ -64,8 +60,6 @@ function setupProtocolHandling() {
 
     // Handle protocol URLs on Windows/Linux
     app.on('second-instance', (event, commandLine, workingDirectory) => {
-        console.log('[Protocol] Second instance command line:', commandLine);
-        
         focusMainWindow();
         
         let protocolUrl = null;
@@ -91,18 +85,13 @@ function setupProtocolHandling() {
         }
         
         if (protocolUrl) {
-            console.log('[Protocol] Valid URL found from second instance:', protocolUrl);
             handleCustomUrl(protocolUrl);
-        } else {
-            console.log('[Protocol] No valid protocol URL found in command line arguments');
-            console.log('[Protocol] Command line args:', commandLine);
         }
     });
 
     // Handle protocol URLs on macOS
     app.on('open-url', (event, url) => {
         event.preventDefault();
-        console.log('[Protocol] Received URL via open-url:', url);
         
         if (!url || !url.startsWith('pickleglass://')) {
             console.warn('[Protocol] Invalid URL format:', url);
@@ -113,7 +102,6 @@ function setupProtocolHandling() {
             handleCustomUrl(url);
         } else {
             pendingDeepLinkUrl = url;
-            console.log('[Protocol] App not ready, storing URL for later');
         }
     });
 }
@@ -150,14 +138,11 @@ if (process.platform === 'win32') {
             const cleanUrl = arg.replace(/[\\₩]/g, '');
             
             if (!cleanUrl.includes(':') || cleanUrl.indexOf('://') === cleanUrl.lastIndexOf(':')) {
-                console.log('[Protocol] Found protocol URL in initial arguments:', cleanUrl);
                 pendingDeepLinkUrl = cleanUrl;
                 break;
             }
         }
     }
-    
-    console.log('[Protocol] Initial process.argv:', process.argv);
 }
 
 const gotTheLock = app.requestSingleInstanceLock();
@@ -187,7 +172,6 @@ app.whenReady().then(async () => {
     
     try {
         await databaseInitializer.initialize();
-        console.log('>>> [index.js] Database initialized successfully');
         
         // Clean up zombie sessions from previous runs first - MOVED TO authService
         // sessionRepository.endAllActiveSessions();
@@ -208,16 +192,14 @@ app.whenReady().then(async () => {
         // Auto warm-up selected Ollama model in background (non-blocking)
         setTimeout(async () => {
             try {
-                console.log('[index.js] Starting background Ollama model warm-up...');
                 await ollamaService.autoWarmUpSelectedModel();
             } catch (error) {
-                console.log('[index.js] Background warm-up failed (non-critical):', error.message);
+                console.warn('[index.js] Background warm-up failed (non-critical):', error.message);
             }
         }, 2000); // Wait 2 seconds after app start
 
         // Start web server and create windows ONLY after all initializations are successful
         WEB_PORT = await startWebStack();
-        console.log('Web front-end listening on', WEB_PORT);
         
         createWindows();
 
@@ -235,7 +217,6 @@ app.whenReady().then(async () => {
 
     // Process any pending deep link after everything is initialized
     if (pendingDeepLinkUrl) {
-        console.log('[Protocol] Processing pending URL:', pendingDeepLinkUrl);
         handleCustomUrl(pendingDeepLinkUrl);
         pendingDeepLinkUrl = null;
     }
@@ -244,11 +225,8 @@ app.whenReady().then(async () => {
 app.on('before-quit', async (event) => {
     // Prevent infinite loop by checking if shutdown is already in progress
     if (isShuttingDown) {
-        console.log('[Shutdown] 🔄 Shutdown already in progress, allowing quit...');
         return;
     }
-    
-    console.log('[Shutdown] App is about to quit. Starting graceful shutdown...');
     
     // Set shutdown flag to prevent infinite loop
     isShuttingDown = true;
@@ -259,27 +237,21 @@ app.on('before-quit', async (event) => {
     try {
         // 1. Stop audio capture first (immediate)
         await listenService.closeSession();
-        console.log('[Shutdown] Audio capture stopped');
         
         // 2. End all active sessions (database operations) - with error handling
         try {
             await sessionRepository.endAllActiveSessions();
-            console.log('[Shutdown] Active sessions ended');
         } catch (dbError) {
             console.warn('[Shutdown] Could not end active sessions (database may be closed):', dbError.message);
         }
         
         // 3. Shutdown Ollama service (potentially time-consuming)
-        console.log('[Shutdown] shutting down Ollama service...');
         const ollamaShutdownSuccess = await Promise.race([
             ollamaService.shutdown(false), // Graceful shutdown
             new Promise(resolve => setTimeout(() => resolve(false), 8000)) // 8s timeout
         ]);
         
-        if (ollamaShutdownSuccess) {
-            console.log('[Shutdown] Ollama service shut down gracefully');
-        } else {
-            console.log('[Shutdown] Ollama shutdown timeout, forcing...');
+        if (!ollamaShutdownSuccess) {
             // Force shutdown if graceful failed
             try {
                 await ollamaService.shutdown(true);
@@ -292,7 +264,6 @@ app.on('before-quit', async (event) => {
         try {
             const whisperService = require('./features/common/services/whisperService');
             await whisperService.stopLiveServer();
-            console.log('[Shutdown] WhisperLive server stopped');
         } catch (whisperError) {
             console.warn('[Shutdown] Error stopping WhisperLive:', whisperError.message);
         }
@@ -300,19 +271,15 @@ app.on('before-quit', async (event) => {
         // 5. Close database connections (final cleanup)
         try {
             databaseInitializer.close();
-            console.log('[Shutdown] Database connections closed');
         } catch (closeError) {
             console.warn('[Shutdown] Error closing database:', closeError.message);
         }
-        
-        console.log('[Shutdown] Graceful shutdown completed successfully');
-        
+
     } catch (error) {
         console.error('[Shutdown] Error during graceful shutdown:', error);
         // Continue with shutdown even if there were errors
     } finally {
         // Actually quit the app now
-        console.log('[Shutdown] Exiting application...');
         app.exit(0); // Use app.exit() instead of app.quit() to force quit
     }
 });
@@ -455,8 +422,6 @@ function setupWebDataHandlers() {
 
 async function handleCustomUrl(url) {
     try {
-        console.log('[Custom URL] Processing URL:', url);
-        
         // Validate and clean URL
         if (!url || typeof url !== 'string' || !url.startsWith('pickleglass://')) {
             console.error('[Custom URL] Invalid URL format:', url);
@@ -468,15 +433,12 @@ async function handleCustomUrl(url) {
         
         // Additional validation
         if (cleanUrl !== url) {
-            console.log('[Custom URL] Cleaned URL from:', url, 'to:', cleanUrl);
             url = cleanUrl;
         }
         
         const urlObj = new URL(url);
         const action = urlObj.hostname;
         const params = Object.fromEntries(urlObj.searchParams);
-        
-        console.log('[Custom URL] Action:', action, 'Params:', params);
 
         switch (action) {
             case 'login':
@@ -494,7 +456,6 @@ async function handleCustomUrl(url) {
                     header.focus();
                     
                     const targetUrl = `http://localhost:${WEB_PORT}/${action}`;
-                    console.log(`[Custom URL] Navigating webview to: ${targetUrl}`);
                     header.webContents.loadURL(targetUrl);
                 }
         }
@@ -514,8 +475,6 @@ async function handleFirebaseAuthCallback(params) {
         return;
     }
 
-    console.log('[Auth] Received ID token from deep link, exchanging for custom token...');
-
     try {
         const functionUrl = 'https://us-west1-pickle-3651a.cloudfunctions.net/pickleGlassAuthCallback';
         const response = await fetch(functionUrl, {
@@ -531,7 +490,6 @@ async function handleFirebaseAuthCallback(params) {
         }
 
         const { customToken, user } = data;
-        console.log('[Auth] Successfully received custom token for user:', user.uid);
 
         const firebaseUser = {
             uid: user.uid,
@@ -542,11 +500,9 @@ async function handleFirebaseAuthCallback(params) {
 
         // 1. Sync user data to local DB
         userRepository.findOrCreate(firebaseUser);
-        console.log('[Auth] User data synced with local DB.');
 
         // 2. Sign in using the authService in the main process
         await authService.signInWithCustomToken(customToken);
-        console.log('[Auth] Main process sign-in initiated. Waiting for onAuthStateChanged...');
 
         // 3. Focus the app window
         const { windowPool } = require('./window/windowManager.js');
@@ -571,8 +527,6 @@ async function handleFirebaseAuthCallback(params) {
 }
 
 function handlePersonalizeFromUrl(params) {
-    console.log('[Custom URL] Personalize params:', params);
-    
     const { windowPool } = require('./window/windowManager.js');
     const header = windowPool.get('header');
     
@@ -581,7 +535,6 @@ function handlePersonalizeFromUrl(params) {
         header.focus();
         
         const personalizeUrl = `http://localhost:${WEB_PORT}/settings`;
-        console.log(`[Custom URL] Navigating to personalize page: ${personalizeUrl}`);
         header.webContents.loadURL(personalizeUrl);
         
         BrowserWindow.getAllWindows().forEach(win => {
@@ -597,7 +550,6 @@ function handlePersonalizeFromUrl(params) {
 
 
 async function startWebStack() {
-  console.log('NODE_ENV =', process.env.NODE_ENV); 
   const isDev = !app.isPackaged;
 
   const getAvailablePort = () => {
@@ -614,17 +566,10 @@ async function startWebStack() {
   const apiPort = await getAvailablePort();
   const frontendPort = await getAvailablePort();
 
-  console.log(`🔧 Allocated ports: API=${apiPort}, Frontend=${frontendPort}`);
-
   process.env.pickleglass_API_PORT = apiPort.toString();
   process.env.pickleglass_API_URL = `http://localhost:${apiPort}`;
   process.env.pickleglass_WEB_PORT = frontendPort.toString();
   process.env.pickleglass_WEB_URL = `http://localhost:${frontendPort}`;
-
-  console.log(`🌍 Environment variables set:`, {
-    pickleglass_API_URL: process.env.pickleglass_API_URL,
-    pickleglass_WEB_URL: process.env.pickleglass_WEB_URL
-  });
 
   const createBackendApp = require('../pickleglass_web/backend_node');
   const nodeApi = createBackendApp(eventBridge);
@@ -655,7 +600,6 @@ async function startWebStack() {
   const tempDir = app.getPath('temp');
   const configPath = path.join(tempDir, 'runtime-config.json');
   fs.writeFileSync(configPath, JSON.stringify(runtimeConfig, null, 2));
-  console.log(`📝 Runtime config created in temp location: ${configPath}`);
 
   const frontSrv = express();
   
@@ -682,8 +626,6 @@ async function startWebStack() {
     app.once('before-quit', () => server.close());
   });
 
-  console.log(`✅ Frontend server started on http://localhost:${frontendPort}`);
-
   const apiSrv = express();
   apiSrv.use(nodeApi);
 
@@ -693,30 +635,21 @@ async function startWebStack() {
     app.once('before-quit', () => server.close());
   });
 
-  console.log(`✅ API server started on http://localhost:${apiPort}`);
-
-  console.log(`🚀 All services ready:
-   Frontend: http://localhost:${frontendPort}
-   API:      http://localhost:${apiPort}`);
-
   return frontendPort;
 }
 
 // Auto-update initialization
 async function initAutoUpdater() {
     if (process.env.NODE_ENV === 'development') {
-        console.log('Development environment, skipping auto-updater.');
         return;
     }
 
     try {
         await autoUpdater.checkForUpdates();
         autoUpdater.on('update-available', () => {
-            console.log('Update available!');
             autoUpdater.downloadUpdate();
         });
         autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName, date, url) => {
-            console.log('Update downloaded:', releaseNotes, releaseName, date, url);
             dialog.showMessageBox({
                 type: 'info',
                 title: 'Application Update',

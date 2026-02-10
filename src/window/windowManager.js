@@ -458,7 +458,7 @@ function createFeatureWindows(header, namesToCreate) {
         switch (name) {
             case 'listen': {
                 const listen = new BrowserWindow({
-                    ...commonChildOptions, width:400,minWidth:400,maxWidth:900,
+                    ...commonChildOptions, width:720,minWidth:720,maxWidth:900,
                     maxHeight:900,
                 });
                 listen.setContentProtection(isContentProtectionOn);

@@ -56,6 +56,7 @@ class SttService {
         this.theirSttSession = null;
         this.myCurrentUtterance = '';
         this.theirCurrentUtterance = '';
+        this.lastActiveSpeaker = null;
         
         // Turn-completion debouncing
         this.myCompletionBuffer = '';
@@ -92,6 +93,28 @@ class SttService {
         }
     }
 
+    noteSpeakerActivity(speaker) {
+        if (!speaker) return;
+
+        if (this.lastActiveSpeaker && this.lastActiveSpeaker !== speaker) {
+            if (this.lastActiveSpeaker === 'Me') {
+                if (this.myCompletionTimer) {
+                    clearTimeout(this.myCompletionTimer);
+                    this.myCompletionTimer = null;
+                }
+                this.flushMyCompletion();
+            } else if (this.lastActiveSpeaker === 'Them') {
+                if (this.theirCompletionTimer) {
+                    clearTimeout(this.theirCompletionTimer);
+                    this.theirCompletionTimer = null;
+                }
+                this.flushTheirCompletion();
+            }
+        }
+
+        this.lastActiveSpeaker = speaker;
+    }
+
     async handleSendSystemAudioContent(data, mimeType) {
         try {
             await this.sendSystemAudioContent(data, mimeType);
@@ -104,7 +127,11 @@ class SttService {
     }
 
     flushMyCompletion() {
-        const finalText = (this.myCompletionBuffer + this.myCurrentUtterance).trim();
+        const finalText = (
+            this.myCompletionBuffer +
+            (this.myCompletionBuffer && this.myCurrentUtterance ? ' ' : '') +
+            this.myCurrentUtterance
+        ).trim();
         if (!this.modelInfo || !finalText) return;
 
         // Notify completion callback
@@ -131,7 +158,11 @@ class SttService {
     }
 
     flushTheirCompletion() {
-        const finalText = (this.theirCompletionBuffer + this.theirCurrentUtterance).trim();
+        const finalText = (
+            this.theirCompletionBuffer +
+            (this.theirCompletionBuffer && this.theirCurrentUtterance ? ' ' : '') +
+            this.theirCurrentUtterance
+        ).trim();
         if (!this.modelInfo || !finalText) return;
         
         // Notify completion callback
@@ -222,6 +253,7 @@ class SttService {
                     const finalText = message.text.trim();
                     
                     if (!isWhisperNoise(finalText)) {
+                        this.noteSpeakerActivity('Me');
                         this.debounceMyCompletion(finalText);
                     } else {
                         console.log(`[Whisper-Me] Filtered noise: "${finalText}"`);
@@ -249,6 +281,7 @@ class SttService {
                     return; // 1. Ignore whitespace-only chunks or noise
                 }
             
+                this.noteSpeakerActivity('Me');
                 this.debounceMyCompletion(textChunk);
                 
                 this.sendToRenderer('stt-update', {
@@ -266,6 +299,8 @@ class SttService {
 
                 const isFinal = message.is_final;
                 console.log(`[SttService-Me-Deepgram] Received: isFinal=${isFinal}, text="${text}"`);
+
+                this.noteSpeakerActivity('Me');
 
                 if (isFinal) {
                     // 최종 결과가 도착하면, 현재 진행중인 부분 발화는 비우고
@@ -300,6 +335,7 @@ class SttService {
                     this.myCurrentUtterance += text;
                     const continuousText = this.myCompletionBuffer + (this.myCompletionBuffer ? ' ' : '') + this.myCurrentUtterance;
                     if (text && !text.includes('vq_lbr_audio_')) {
+                        this.noteSpeakerActivity('Me');
                         this.sendToRenderer('stt-update', {
                             speaker: 'Me',
                             text: continuousText,
@@ -311,6 +347,7 @@ class SttService {
                 } else if (type === 'conversation.item.input_audio_transcription.completed') {
                     if (text && text.trim()) {
                         const finalUtteranceText = text.trim();
+                        this.noteSpeakerActivity('Me');
                         this.myCurrentUtterance = '';
                         this.debounceMyCompletion(finalUtteranceText);
                     }
@@ -337,6 +374,7 @@ class SttService {
                     
                     // Filter out Whisper noise transcriptions
                     if (!isWhisperNoise(finalText)) {
+                        this.noteSpeakerActivity('Them');
                         this.debounceTheirCompletion(finalText);
                     } else {
                         console.log(`[Whisper-Them] Filtered noise: "${finalText}"`);
@@ -364,6 +402,7 @@ class SttService {
                     return; // 1. Ignore whitespace-only chunks or noise
                 }
 
+                this.noteSpeakerActivity('Them');
                 this.debounceTheirCompletion(textChunk);
                 
                 this.sendToRenderer('stt-update', {
@@ -380,6 +419,8 @@ class SttService {
                 if (!text || text.trim().length === 0) return;
 
                 const isFinal = message.is_final;
+
+                this.noteSpeakerActivity('Them');
 
                 if (isFinal) {
                     this.theirCurrentUtterance = ''; 
@@ -410,6 +451,7 @@ class SttService {
                     this.theirCurrentUtterance += text;
                     const continuousText = this.theirCompletionBuffer + (this.theirCompletionBuffer ? ' ' : '') + this.theirCurrentUtterance;
                     if (text && !text.includes('vq_lbr_audio_')) {
+                        this.noteSpeakerActivity('Them');
                         this.sendToRenderer('stt-update', {
                             speaker: 'Them',
                             text: continuousText,
@@ -421,6 +463,7 @@ class SttService {
                 } else if (type === 'conversation.item.input_audio_transcription.completed') {
                     if (text && text.trim()) {
                         const finalUtteranceText = text.trim();
+                        this.noteSpeakerActivity('Them');
                         this.theirCurrentUtterance = '';
                         this.debounceTheirCompletion(finalUtteranceText);
                     }
@@ -436,6 +479,7 @@ class SttService {
             if (!this.modelInfo) return;
             const text = (message.text || '').trim();
             if (!text || isWhisperNoise(text)) return;
+            this.noteSpeakerActivity('Me');
             const display = (this.myCompletionBuffer + (this.myCompletionBuffer ? ' ' : '') + text).trim();
             if (display) {
                 this.sendToRenderer('stt-update', {
@@ -452,6 +496,7 @@ class SttService {
             if (!this.modelInfo) return;
             const text = (message.text || '').trim();
             if (!text || isWhisperNoise(text)) return;
+            this.noteSpeakerActivity('Them');
             const display = (this.theirCompletionBuffer + (this.theirCompletionBuffer ? ' ' : '') + text).trim();
             if (display) {
                 this.sendToRenderer('stt-update', {
@@ -818,6 +863,7 @@ class SttService {
         this.theirCurrentUtterance = '';
         this.myCompletionBuffer = '';
         this.theirCompletionBuffer = '';
+        this.lastActiveSpeaker = null;
         this.modelInfo = null; 
     }
 }
