@@ -539,13 +539,15 @@ class LocalAIManager extends EventEmitter {
         }
         
         this.syncInterval = setInterval(async () => {
+            // Skip Ollama sync - it's disabled
             for (const serviceName of Object.keys(this.services)) {
+                if (serviceName === 'ollama') continue;
                 await this.updateServiceState(serviceName);
             }
         }, interval);
         
-        // 각 서비스의 주기적 동기화도 시작
-        ollamaService.startPeriodicSync();
+        // 각 서비스의 주기적 동기화도 시작 (Skip Ollama)
+        // ollamaService.startPeriodicSync(); // Ollama is disabled
     }
     
     /**

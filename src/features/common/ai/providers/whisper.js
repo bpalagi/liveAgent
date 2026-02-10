@@ -93,7 +93,9 @@ class WhisperSTTSession extends EventEmitter {
             // Ensure the WhisperLive server is running
             if (!this.whisperService.isLiveServerRunning()) {
                 console.log(`[WhisperSTT-${this.sessionId}] Starting WhisperLive server...`);
-                await this.whisperService.startLiveServer();
+                // Map the model name to the correct faster-whisper format
+                const serverModel = this._mapModelName(this.model);
+                await this.whisperService.startLiveServer(serverModel);
             }
 
             const port = this.whisperService.getLiveServerPort();
@@ -120,8 +122,15 @@ class WhisperSTTSession extends EventEmitter {
                         initial_prompt: 'This is a conversation in English.',
                         // Server-side tuning for speed + quality
                         no_speech_thresh: 0.3,          // Lower = fewer false silence drops
-                        same_output_threshold: 3,        // Finalize repeated segments faster
+                        same_output_threshold: 1,        // Finalize repeated segments even faster
                         send_last_n_segments: 5,         // Less data per WS message
+                        // VAD parameters for shorter segments
+                        vad_parameters: {
+                            onset: 0.5,                 // Speech onset threshold (lower = more sensitive)
+                            offset: 0.3,                // Speech offset threshold (lower = faster cut)
+                            // min_duration_on: 0.2,    // Removed - not supported by current VAD library
+                            // min_duration_off: 0.3,   // Removed - not supported by current VAD library
+                        },
                     };
                     this.ws.send(JSON.stringify(config));
                     console.log(`[WhisperSTT-${this.sessionId}] Connected, sent config: ${JSON.stringify(config)}`);

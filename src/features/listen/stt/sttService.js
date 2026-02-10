@@ -6,6 +6,8 @@ const modelStateService = require('../../common/services/modelStateService');
 const COMPLETION_DEBOUNCE_MS = 2000;
 // Whisper emits complete sentences — use a shorter debounce for faster display
 const WHISPER_DEBOUNCE_MS = 500;
+// Minimum delay between sentence-based flushes to prevent fragmentation
+const SENTENCE_FLUSH_DELAY_MS = 300;
 
 // ── Whisper noise / hallucination filter ─────────────────────────────────────────
 const WHISPER_NOISE_TAGS = [
@@ -233,12 +235,19 @@ class SttService {
     async initializeSttSessions(language = 'en') {
         const effectiveLanguage = process.env.OPENAI_TRANSCRIBE_LANG || language || 'en';
 
+        // Always get fresh model info to prevent using stale/cached info
         const modelInfo = await modelStateService.getCurrentModelInfo('stt');
         if (!modelInfo || !modelInfo.apiKey) {
             throw new Error('AI model or API key is not configured.');
         }
         this.modelInfo = modelInfo;
         console.log(`[SttService] Initializing STT for ${modelInfo.provider} using model ${modelInfo.model}`);
+        
+        // Close any existing sessions before creating new ones
+        if (this.mySttSession || this.theirSttSession) {
+            console.log('[SttService] Closing existing sessions before initializing new ones');
+            await this.closeSessions();
+        }
 
         const handleMyMessage = message => {
             if (!this.modelInfo) {
@@ -254,7 +263,20 @@ class SttService {
                     
                     if (!isWhisperNoise(finalText)) {
                         this.noteSpeakerActivity('Me');
-                        this.debounceMyCompletion(finalText);
+                        
+                        // Check if the text ends with sentence punctuation
+                        const hasSentenceEnd = /[.!?]\s*$/.test(finalText);
+                        
+                        if (hasSentenceEnd && this.myCompletionBuffer) {
+                            // If we have a buffer and this is a complete sentence, flush immediately
+                            this.flushMyCompletion();
+                            this.myCompletionBuffer = finalText;
+                            // Set a short timer to finalize this sentence
+                            if (this.myCompletionTimer) clearTimeout(this.myCompletionTimer);
+                            this.myCompletionTimer = setTimeout(() => this.flushMyCompletion(), SENTENCE_FLUSH_DELAY_MS);
+                        } else {
+                            this.debounceMyCompletion(finalText);
+                        }
                     } else {
                         console.log(`[Whisper-Me] Filtered noise: "${finalText}"`);
                     }
@@ -375,7 +397,20 @@ class SttService {
                     // Filter out Whisper noise transcriptions
                     if (!isWhisperNoise(finalText)) {
                         this.noteSpeakerActivity('Them');
-                        this.debounceTheirCompletion(finalText);
+                        
+                        // Check if the text ends with sentence punctuation
+                        const hasSentenceEnd = /[.!?]\s*$/.test(finalText);
+                        
+                        if (hasSentenceEnd && this.theirCompletionBuffer) {
+                            // If we have a buffer and this is a complete sentence, flush immediately
+                            this.flushTheirCompletion();
+                            this.theirCompletionBuffer = finalText;
+                            // Set a short timer to finalize this sentence
+                            if (this.theirCompletionTimer) clearTimeout(this.theirCompletionTimer);
+                            this.theirCompletionTimer = setTimeout(() => this.flushTheirCompletion(), SENTENCE_FLUSH_DELAY_MS);
+                        } else {
+                            this.debounceTheirCompletion(finalText);
+                        }
                     } else {
                         console.log(`[Whisper-Them] Filtered noise: "${finalText}"`);
                     }

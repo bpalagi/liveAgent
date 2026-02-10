@@ -50,6 +50,26 @@ class ListenService {
 
     initialize() {
         this.setupIpcHandlers();
+        
+        // Listen for model state changes to reinitialize STT if needed
+        const modelStateService = require('../common/services/modelStateService');
+        modelStateService.on('settings-updated', async () => {
+            if (this.currentSessionId) {
+                console.log('[ListenService] Model settings changed, checking if STT reinitialization is needed...');
+                const currentModel = await modelStateService.getCurrentModelInfo('stt');
+                if (currentModel && currentModel.provider !== this.sttService.modelInfo?.provider) {
+                    console.log('[ListenService] STT provider changed, reinitializing sessions...');
+                    try {
+                        await this.sttService.initializeSttSessions();
+                        this.sendToRenderer('update-status', 'Connected. Ready to listen.');
+                    } catch (err) {
+                        console.error('[ListenService] Failed to reinitialize STT after model change:', err);
+                        this.sendToRenderer('update-status', 'STT reinitialization failed.');
+                    }
+                }
+            }
+        });
+        
         console.log('[ListenService] Initialized and ready.');
     }
 

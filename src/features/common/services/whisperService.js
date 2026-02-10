@@ -38,6 +38,7 @@ class WhisperService extends EventEmitter {
         this.liveServerProcess = null;
         this.liveServerPort = 9090;
         this.liveServerReady = false;
+        this.currentServerModel = null; // Track the current model
         this.liveVenvPath = path.join(os.homedir(), '.glass', 'whisper-live-venv');
         this._liveServerStartPromise = null;
         
@@ -669,9 +670,16 @@ class WhisperService extends EventEmitter {
     }
 
     async startLiveServer(model = 'small.en') {
-        if (this.isLiveServerRunning()) {
-            console.log('[WhisperService] WhisperLive server already running');
+        // If server is already running with the same model, just return
+        if (this.isLiveServerRunning() && this.currentServerModel === model) {
+            console.log('[WhisperService] WhisperLive server already running with the same model');
             return;
+        }
+
+        // If server is running with a different model, stop it first
+        if (this.isLiveServerRunning()) {
+            console.log('[WhisperService] WhisperLive server running with different model, restarting...');
+            await this.stopLiveServer();
         }
 
         // Prevent concurrent startup attempts
@@ -683,6 +691,7 @@ class WhisperService extends EventEmitter {
         this._liveServerStartPromise = this._doStartLiveServer(model);
         try {
             await this._liveServerStartPromise;
+            this.currentServerModel = model;
         } finally {
             this._liveServerStartPromise = null;
         }
@@ -759,6 +768,7 @@ class WhisperService extends EventEmitter {
         }
         this.liveServerReady = false;
         this.liveServerProcess = null;
+        this.currentServerModel = null; // Reset the current model
         console.log('[WhisperService] WhisperLive server stopped');
     }
 

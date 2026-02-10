@@ -104,6 +104,12 @@ class ModelStateService extends EventEmitter {
     async handleLocalAIStateChange(service, state) {
         console.log(`[ModelStateService] LocalAI state changed: ${service}`, state);
 
+        // Skip Ollama entirely - never process or register it
+        if (service === 'ollama') {
+            console.log(`[ModelStateService] Ignoring Ollama state change - Ollama is disabled`);
+            return;
+        }
+
         // Auto-register local providers with api_key='local' when detected as installed
         if (state.installed) {
             const existing = await providerSettingsRepository.getByProvider(service);
@@ -114,9 +120,17 @@ class ModelStateService extends EventEmitter {
             }
         }
 
-        const types = service === 'ollama' ? ['llm'] : service === 'whisper' ? ['stt'] : [];
-        await this._autoSelectAvailableModels(types);
-        this.emit('state-updated', await this.getLiveState());
+        // Only trigger auto-selection if the service is actually available (installed AND running)
+        // This prevents unnecessary model switches when services are not running
+        const types = [];
+        if (service === 'whisper' && state.installed) {
+            types.push('stt');
+        }
+        
+        if (types.length > 0) {
+            await this._autoSelectAvailableModels(types);
+            this.emit('state-updated', await this.getLiveState());
+        }
     }
 
     async getLiveState() {
@@ -146,6 +160,19 @@ class ModelStateService extends EventEmitter {
             let isCurrentModelValid = false;
             const forceReselection = forceReselectionForTypes.includes(type);
 
+            // Skip STT model selection if a listening session is active
+            if (type === 'stt' && currentModelId) {
+                try {
+                    const listenService = require('../listen/listenService');
+                    if (listenService.isSessionActive()) {
+                        console.log(`[ModelStateService] STT session is active, skipping model auto-selection to avoid interruption`);
+                        continue;
+                    }
+                } catch (err) {
+                    // listenService might not be initialized, continue with normal flow
+                }
+            }
+
             if (currentModelId && !forceReselection) {
                 const provider = this.getProviderForModel(currentModelId, type);
                 const apiKey = apiKeys[provider];
@@ -157,22 +184,45 @@ class ModelStateService extends EventEmitter {
             if (!isCurrentModelValid) {
                 console.log(`[ModelStateService] No valid ${type.toUpperCase()} model selected or selection forced. Finding an alternative...`);
                 const availableModels = await this.getAvailableModels(type);
+                console.log(`[ModelStateService] Available ${type.toUpperCase()} models:`, availableModels.map(m => `${m.id} (${this.getProviderForModel(m.id, type)})`));
+                
                 if (availableModels.length > 0) {
                     let newModel;
                     if (forceReselection) {
-                        // When force-reselecting (e.g. local AI became available), prefer local providers
-                        const localModel = availableModels.find(model => {
-                            const provider = this.getProviderForModel(model.id, type);
-                            return provider === 'ollama' || provider === 'whisper';
-                        });
-                        newModel = localModel || availableModels[0];
+                        // When force-reselecting, prefer Whisper for STT, API providers for LLM
+                        if (type === 'stt') {
+                            const whisperModel = availableModels.find(model => {
+                                const provider = this.getProviderForModel(model.id, type);
+                                return provider === 'whisper';
+                            });
+                            newModel = whisperModel || availableModels[0];
+                            console.log(`[ModelStateService] Force re-selecting STT: chose ${newModel.id} (provider: ${this.getProviderForModel(newModel.id, type)})`);
+                        } else {
+                            // For LLM, prefer API providers
+                            const apiModel = availableModels.find(model => {
+                                const provider = this.getProviderForModel(model.id, type);
+                                return provider && provider !== 'whisper';
+                            });
+                            newModel = apiModel || availableModels[0];
+                        }
                     } else {
-                        // On initial/normal selection, prefer API providers over local
-                        const apiModel = availableModels.find(model => {
-                            const provider = this.getProviderForModel(model.id, type);
-                            return provider && provider !== 'ollama' && provider !== 'whisper';
-                        });
-                        newModel = apiModel || availableModels[0];
+                        // On initial/normal selection, prefer API providers over local (except Whisper for STT)
+                        if (type === 'stt') {
+                            // For STT, Whisper is preferred
+                            const whisperModel = availableModels.find(model => {
+                                const provider = this.getProviderForModel(model.id, type);
+                                return provider === 'whisper';
+                            });
+                            newModel = whisperModel || availableModels[0];
+                            console.log(`[ModelStateService] Normal STT selection: chose ${newModel.id} (provider: ${this.getProviderForModel(newModel.id, type)})`);
+                        } else {
+                            // For LLM, prefer API providers
+                            const apiModel = availableModels.find(model => {
+                                const provider = this.getProviderForModel(model.id, type);
+                                return provider && provider !== 'ollama' && provider !== 'whisper';
+                            });
+                            newModel = apiModel || availableModels[0];
+                        }
                     }
                     await this.setSelectedModel(type, newModel.id);
                     console.log(`[ModelStateService] Auto-selected ${type.toUpperCase()} model: ${newModel.id}`);
@@ -303,15 +353,15 @@ class ModelStateService extends EventEmitter {
         }
         if (!modelId || !type) return null;
         for (const providerId in PROVIDERS) {
+            // Skip Ollama - it's disabled
+            if (providerId === 'ollama') continue;
+            
             const models = type === 'llm' ? PROVIDERS[providerId].llmModels : PROVIDERS[providerId].sttModels;
             if (models && models.some(m => m.id === modelId)) {
                 return providerId;
             }
         }
-        if (type === 'llm') {
-            const installedModels = ollamaModelRepository.getInstalledModels();
-            if (installedModels.some(m => m.name === modelId)) return 'ollama';
-        }
+        // Remove Ollama fallback check - Ollama is disabled
         return null;
     }
 
@@ -344,8 +394,9 @@ class ModelStateService extends EventEmitter {
         
         console.log(`[ModelStateService] Selected ${type} model: ${modelId} (provider: ${provider})`);
         
+        // Skip Ollama warm-up - Ollama is disabled
         if (type === 'llm' && provider === 'ollama') {
-            require('./localAIManager').warmUpModel(modelId).catch(err => console.warn(err));
+            console.log(`[ModelStateService] Skipping Ollama warm-up - Ollama is disabled`);
         }
         
         this.emit('state-updated', await this.getLiveState());
@@ -362,9 +413,9 @@ class ModelStateService extends EventEmitter {
             if (!setting.api_key) continue;
 
             const providerId = setting.provider;
-            if (providerId === 'ollama' && type === 'llm') {
-                const installed = ollamaModelRepository.getInstalledModels();
-                available.push(...installed.map(m => ({ id: m.name, name: m.name })));
+            // Skip Ollama entirely - never include its models
+            if (providerId === 'ollama') {
+                continue;
             } else if (PROVIDERS[providerId]?.[modelListKey]) {
                 available.push(...PROVIDERS[providerId][modelListKey]);
             }
