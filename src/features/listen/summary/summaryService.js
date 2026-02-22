@@ -1,4 +1,3 @@
-const { BrowserWindow } = require('electron');
 const { getSystemPrompt } = require('../../common/prompts/promptBuilder.js');
 const { createLLM } = require('../../common/ai/factory');
 const sessionRepository = require('../../common/repositories/session');
@@ -17,8 +16,7 @@ class SummaryService {
         this.analysisInProgress = false;
         this.analysisPending = false;
         this.analysisRunId = 0;
-        
-        // Callbacks
+
         this.onAnalysisComplete = null;
         this.onStatusUpdate = null;
     }
@@ -35,7 +33,6 @@ class SummaryService {
     sendToRenderer(channel, data) {
         const { windowPool } = require('../../../window/windowManager');
         const listenWindow = windowPool?.get('listen');
-        
         if (listenWindow && !listenWindow.isDestroyed()) {
             listenWindow.webContents.send(channel, data);
         }
@@ -44,10 +41,6 @@ class SummaryService {
     addConversationTurn(speaker, text) {
         const conversationText = `${speaker.toLowerCase()}: ${text.trim()}`;
         this.conversationHistory.push(conversationText);
-        console.log(`💬 Added conversation text: ${conversationText}`);
-        console.log(`📈 Total conversation history: ${this.conversationHistory.length} texts`);
-
-        // Trigger analysis if needed
         this.triggerAnalysisIfNeeded();
     }
 
@@ -59,45 +52,46 @@ class SummaryService {
         this.conversationHistory = [];
         this.previousAnalysisResult = null;
         this.analysisHistory = [];
-
         this.lastAnalyzedConversationLength = 0;
         this.analysisInProgress = false;
         this.analysisPending = false;
         this.analysisRunId = 0;
-        console.log('🔄 Conversation history and analysis state reset');
     }
 
-    /**
-     * Converts conversation history into text to include in the prompt.
-     * @param {Array<string>} conversationTexts - Array of conversation texts ["me: ~~~", "them: ~~~", ...]
-     * @param {number} maxTurns - Maximum number of recent turns to include
-     * @returns {string} - Formatted conversation string for the prompt
-     */
     formatConversationForPrompt(conversationTexts, maxTurns = 30) {
         if (conversationTexts.length === 0) return '';
         return conversationTexts.slice(-maxTurns).join('\n');
     }
 
     async makeOutlineAndRequests(conversationTexts, maxTurns = 30) {
-        console.log(`🔍 makeOutlineAndRequests called - conversationTexts: ${conversationTexts.length}`);
-
         if (conversationTexts.length === 0) {
-            console.log('⚠️ No conversation texts available for analysis');
             return null;
         }
 
         const recentConversation = this.formatConversationForPrompt(conversationTexts, maxTurns);
 
-        // Include previous analysis results in prompt
         let contextualPrompt = '';
         if (this.previousAnalysisResult) {
+            const previousSummary = this.previousAnalysisResult.summaryCard?.summary || this.previousAnalysisResult.summary?.[0] || '';
+            const previousBullets = this._normalizeStringArray(
+                this.previousAnalysisResult.summaryCard?.bullets?.length
+                    ? this.previousAnalysisResult.summaryCard.bullets
+                    : this.previousAnalysisResult.topic?.bullets,
+                5
+            );
+            const previousQuestions = this._normalizeStringArray(
+                this.previousAnalysisResult.insights?.suggestedFollowUpQuestions?.length
+                    ? this.previousAnalysisResult.insights.suggestedFollowUpQuestions
+                    : this.previousAnalysisResult.actions,
+                4
+            );
             contextualPrompt = `
-Previous Analysis Context:
-- Main Topic: ${this.previousAnalysisResult.topic.header}
-- Key Points: ${this.previousAnalysisResult.summary.slice(0, 3).join(', ')}
-- Last Actions: ${this.previousAnalysisResult.actions.slice(0, 2).join(', ')}
+Previous analysis context:
+- Summary: ${previousSummary}
+- Key points: ${previousBullets.slice(0, 3).join(', ')}
+- Suggested follow-up questions: ${previousQuestions.slice(0, 2).join(', ')}
 
-Please build upon this context while analyzing the new conversation segments.
+Build on this context while prioritizing the latest conversation turns.
 `;
         }
 
@@ -113,40 +107,29 @@ Please build upon this context while analyzing the new conversation segments.
             if (!modelInfo || !modelInfo.apiKey) {
                 throw new Error('AI model or API key is not configured.');
             }
-            console.log(`🤖 Sending analysis request to ${modelInfo.provider} using model ${modelInfo.model}`);
-            
+
             const messages = [
-                {
-                    role: 'system',
-                    content: systemPrompt,
-                },
+                { role: 'system', content: systemPrompt },
                 {
                     role: 'user',
                     content: `${contextualPrompt}
 
-Analyze the conversation and provide a structured summary. Format your response as follows:
+Analyze the conversation and return STRICT JSON only (no markdown, no prose, no code fences) with exactly this schema:
+{
+  "next_sentence_to_say": "string",
+  "question_answer_guidance": "string",
+  "suggested_follow_up_questions": ["string"],
+  "summary": "string",
+  "summary_bullets": ["string"]
+}
 
-**Summary Overview**
-- Main discussion point with context
-
-**Key Topic: [Topic Name]**
-- First key insight
-- Second key insight
-- Third key insight
-
-**Extended Explanation**
-Provide 2-3 sentences explaining the context and implications.
-
-**Suggested Questions**
-1. First follow-up question?
-2. Second follow-up question?
-3. Third follow-up question?
-
-Keep all points concise and build upon previous analysis if provided.`,
+Rules:
+- Output valid JSON only.
+- Keep suggested_follow_up_questions to at most 4 items.
+- Keep summary_bullets to at most 5 items.
+- Keep all fields concise and relevant to the latest turns.`,
                 },
             ];
-
-            console.log('🤖 Sending analysis request to AI...');
 
             const llm = createLLM(modelInfo.provider, {
                 apiKey: modelInfo.apiKey,
@@ -158,9 +141,7 @@ Keep all points concise and build upon previous analysis if provided.`,
             });
 
             const completion = await llm.chat(messages);
-
             const responseText = completion.content;
-            console.log(`✅ Analysis response received: ${responseText}`);
             const structuredData = this.parseResponseText(responseText, this.previousAnalysisResult);
 
             if (this.currentSessionId) {
@@ -168,17 +149,24 @@ Keep all points concise and build upon previous analysis if provided.`,
                     summaryRepository.saveSummary({
                         sessionId: this.currentSessionId,
                         text: responseText,
-                        tldr: structuredData.summary.join('\n'),
-                        bullet_json: JSON.stringify(structuredData.topic.bullets),
-                        action_json: JSON.stringify(structuredData.actions),
-                        model: modelInfo.model
+                        tldr: structuredData.summaryCard?.summary || structuredData.summary.join('\n'),
+                        bullet_json: JSON.stringify(
+                            structuredData.summaryCard?.bullets?.length
+                                ? structuredData.summaryCard.bullets
+                                : structuredData.topic.bullets
+                        ),
+                        action_json: JSON.stringify(
+                            structuredData.insights?.suggestedFollowUpQuestions?.length
+                                ? structuredData.insights.suggestedFollowUpQuestions
+                                : structuredData.actions
+                        ),
+                        model: modelInfo.model,
                     });
                 } catch (err) {
                     console.error('[DB] Failed to save summary:', err);
                 }
             }
 
-            // Save analysis results
             this.previousAnalysisResult = structuredData;
             this.analysisHistory.push({
                 timestamp: Date.now(),
@@ -201,121 +189,219 @@ Keep all points concise and build upon previous analysis if provided.`,
     }
 
     parseResponseText(responseText, previousResult) {
-        const structuredData = {
-            summary: [],
-            topic: { header: '', bullets: [] },
-            actions: [],
-            followUps: ['✉️ Draft a follow-up email', '✅ Generate action items', '📝 Show summary'],
-        };
-
-        // Use previous result as default if available
-        if (previousResult) {
-            structuredData.topic.header = previousResult.topic.header;
-            structuredData.summary = [...previousResult.summary];
-        }
-
         try {
-            const lines = responseText.split('\n');
-            let currentSection = '';
-            let isCapturingTopic = false;
-            let topicName = '';
-
-            for (const line of lines) {
-                const trimmedLine = line.trim();
-
-                // Detect section header
-                if (trimmedLine.startsWith('**Summary Overview**')) {
-                    currentSection = 'summary-overview';
-                    continue;
-                } else if (trimmedLine.startsWith('**Key Topic:')) {
-                    currentSection = 'topic';
-                    isCapturingTopic = true;
-                    topicName = trimmedLine.match(/\*\*Key Topic: (.+?)\*\*/)?.[1] || '';
-                    if (topicName) {
-                        structuredData.topic.header = topicName + ':';
-                    }
-                    continue;
-                } else if (trimmedLine.startsWith('**Extended Explanation**')) {
-                    currentSection = 'explanation';
-                    continue;
-                } else if (trimmedLine.startsWith('**Suggested Questions**')) {
-                    currentSection = 'questions';
-                    continue;
-                }
-
-                // Parse content
-                if (trimmedLine.startsWith('-') && currentSection === 'summary-overview') {
-                    const summaryPoint = trimmedLine.substring(1).trim();
-                    if (summaryPoint && !structuredData.summary.includes(summaryPoint)) {
-                        // Update existing summary (keep max 5)
-                        structuredData.summary.unshift(summaryPoint);
-                        if (structuredData.summary.length > 5) {
-                            structuredData.summary.pop();
-                        }
-                    }
-                } else if (trimmedLine.startsWith('-') && currentSection === 'topic') {
-                    const bullet = trimmedLine.substring(1).trim();
-                    if (bullet && structuredData.topic.bullets.length < 3) {
-                        structuredData.topic.bullets.push(bullet);
-                    }
-                } else if (currentSection === 'explanation' && trimmedLine) {
-                    // Add explanation to topic bullets (by sentence)
-                    const sentences = trimmedLine
-                        .split(/\.\s+/)
-                        .filter(s => s.trim().length > 0)
-                        .map(s => s.trim() + (s.endsWith('.') ? '' : '.'));
-
-                    sentences.forEach(sentence => {
-                        if (structuredData.topic.bullets.length < 3 && !structuredData.topic.bullets.includes(sentence)) {
-                            structuredData.topic.bullets.push(sentence);
-                        }
-                    });
-                } else if (trimmedLine.match(/^\d+\./) && currentSection === 'questions') {
-                    const question = trimmedLine.replace(/^\d+\.\s*/, '').trim();
-                    if (question && question.includes('?')) {
-                        structuredData.actions.push(`❓ ${question}`);
-                    }
-                }
+            const parsedJson = this._extractAndParseJson(responseText);
+            if (parsedJson) {
+                const normalized = this._normalizeJsonSchema(parsedJson, previousResult);
+                return this._buildStructuredDataFromNewSchema(normalized, previousResult);
             }
 
-            // Add default actions
-            const defaultActions = ['✨ What should I say next?', '💬 Suggest follow-up questions'];
-            defaultActions.forEach(action => {
-                if (!structuredData.actions.includes(action)) {
-                    structuredData.actions.push(action);
-                }
-            });
-
-            // Limit number of actions
-            structuredData.actions = structuredData.actions.slice(0, 5);
-
-            // Validate and merge with previous data
-            if (structuredData.summary.length === 0 && previousResult) {
-                structuredData.summary = previousResult.summary;
-            }
-            if (structuredData.topic.bullets.length === 0 && previousResult) {
-                structuredData.topic.bullets = previousResult.topic.bullets;
-            }
+            return this._parseLegacyMarkdownToNewSchema(responseText, previousResult);
         } catch (error) {
             console.error('❌ Error parsing response text:', error);
-            // Return previous result on error
-            return (
-                previousResult || {
-                    summary: [],
-                    topic: { header: 'Analysis in progress', bullets: [] },
-                    actions: ['✨ What should I say next?', '💬 Suggest follow-up questions'],
-                    followUps: ['✉️ Draft a follow-up email', '✅ Generate action items', '📝 Show summary'],
-                }
+            return this._buildStructuredDataFromNewSchema(
+                {
+                    next_sentence_to_say: previousResult?.insights?.nextSentenceToSay || '',
+                    question_answer_guidance: previousResult?.insights?.questionAnswerGuidance || '',
+                    suggested_follow_up_questions: previousResult?.insights?.suggestedFollowUpQuestions || previousResult?.actions || [],
+                    summary: previousResult?.summaryCard?.summary || previousResult?.summary?.[0] || '',
+                    summary_bullets: previousResult?.summaryCard?.bullets || previousResult?.topic?.bullets || [],
+                },
+                previousResult
             );
         }
-
-        console.log('📊 Final structured data:', JSON.stringify(structuredData, null, 2));
-        return structuredData;
     }
 
-    /**
-     * Triggers analysis when conversation history reaches 5 texts.
-     */
+    _extractAndParseJson(responseText) {
+        if (!responseText || typeof responseText !== 'string') return null;
+
+        const candidates = [];
+        const trimmed = responseText.trim();
+        if (trimmed) candidates.push(trimmed);
+
+        const jsonBlockMatch = responseText.match(/```json\s*([\s\S]*?)```/i);
+        if (jsonBlockMatch?.[1]) candidates.unshift(jsonBlockMatch[1].trim());
+
+        const genericBlockMatch = responseText.match(/```\s*([\s\S]*?)```/i);
+        if (genericBlockMatch?.[1]) candidates.push(genericBlockMatch[1].trim());
+
+        const braceStart = responseText.indexOf('{');
+        const braceEnd = responseText.lastIndexOf('}');
+        if (braceStart !== -1 && braceEnd > braceStart) {
+            candidates.push(responseText.slice(braceStart, braceEnd + 1).trim());
+        }
+
+        for (const candidate of candidates) {
+            try {
+                return JSON.parse(candidate);
+            } catch {
+                continue;
+            }
+        }
+
+        return null;
+    }
+
+    _normalizeString(value, fallback = '') {
+        if (typeof value === 'string') {
+            const normalized = value.trim();
+            if (normalized) return normalized;
+        }
+        return fallback;
+    }
+
+    _normalizeStringArray(value, maxItems = 5, fallback = []) {
+        const source = Array.isArray(value) ? value : fallback;
+        const deduped = [];
+        for (const item of source) {
+            const text = this._normalizeString(item);
+            if (text && !deduped.includes(text)) deduped.push(text);
+            if (deduped.length >= maxItems) break;
+        }
+        return deduped;
+    }
+
+    _normalizeJsonSchema(parsedJson, previousResult) {
+        const previousQuestions = this._normalizeStringArray(
+            previousResult?.insights?.suggestedFollowUpQuestions?.length
+                ? previousResult.insights.suggestedFollowUpQuestions
+                : previousResult?.actions,
+            4
+        );
+        const previousBullets = this._normalizeStringArray(
+            previousResult?.summaryCard?.bullets?.length
+                ? previousResult.summaryCard.bullets
+                : previousResult?.topic?.bullets,
+            5
+        );
+        const previousSummary = this._normalizeString(previousResult?.summaryCard?.summary || previousResult?.summary?.[0], '');
+
+        return {
+            next_sentence_to_say: this._normalizeString(parsedJson?.next_sentence_to_say, previousResult?.insights?.nextSentenceToSay || ''),
+            question_answer_guidance: this._normalizeString(parsedJson?.question_answer_guidance, previousResult?.insights?.questionAnswerGuidance || ''),
+            suggested_follow_up_questions: this._normalizeStringArray(parsedJson?.suggested_follow_up_questions, 4, previousQuestions),
+            summary: this._normalizeString(parsedJson?.summary, previousSummary),
+            summary_bullets: this._normalizeStringArray(parsedJson?.summary_bullets, 5, previousBullets),
+        };
+    }
+
+    _buildStructuredDataFromNewSchema(normalized, previousResult) {
+        const summaryText = this._normalizeString(
+            normalized.summary,
+            previousResult?.summaryCard?.summary || previousResult?.summary?.[0] || ''
+        );
+        const bullets = this._normalizeStringArray(
+            normalized.summary_bullets,
+            5,
+            previousResult?.summaryCard?.bullets?.length ? previousResult.summaryCard.bullets : previousResult?.topic?.bullets || []
+        );
+        const suggestedFollowUps = this._normalizeStringArray(
+            normalized.suggested_follow_up_questions,
+            4,
+            previousResult?.insights?.suggestedFollowUpQuestions?.length
+                ? previousResult.insights.suggestedFollowUpQuestions
+                : previousResult?.actions || []
+        );
+
+        const summary = this._normalizeStringArray([summaryText, ...bullets], 5, previousResult?.summary || []);
+
+        return {
+            insights: {
+                nextSentenceToSay: this._normalizeString(normalized.next_sentence_to_say, previousResult?.insights?.nextSentenceToSay || ''),
+                questionAnswerGuidance: this._normalizeString(
+                    normalized.question_answer_guidance,
+                    previousResult?.insights?.questionAnswerGuidance || ''
+                ),
+                suggestedFollowUpQuestions: suggestedFollowUps,
+            },
+            summaryCard: {
+                summary: summaryText,
+                bullets,
+            },
+            summary,
+            topic: {
+                header: this._normalizeString(previousResult?.topic?.header, 'Summary:'),
+                bullets,
+            },
+            actions: suggestedFollowUps,
+            followUps: suggestedFollowUps,
+        };
+    }
+
+    _parseLegacyMarkdownToNewSchema(responseText, previousResult) {
+        const legacy = {
+            summary: this._normalizeStringArray(previousResult?.summary, 5),
+            topic: {
+                header: this._normalizeString(previousResult?.topic?.header, 'Summary:'),
+                bullets: this._normalizeStringArray(previousResult?.topic?.bullets, 5),
+            },
+            actions: this._normalizeStringArray(previousResult?.actions, 4),
+        };
+
+        const lines = (responseText || '').split('\n');
+        let currentSection = '';
+
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+
+            if (trimmedLine.startsWith('**Summary Overview**')) {
+                currentSection = 'summary-overview';
+                continue;
+            }
+            if (trimmedLine.startsWith('**Key Topic:')) {
+                currentSection = 'topic';
+                const topicName = trimmedLine.match(/\*\*Key Topic: (.+?)\*\*/)?.[1] || '';
+                if (topicName) legacy.topic.header = `${topicName}:`;
+                continue;
+            }
+            if (trimmedLine.startsWith('**Suggested Questions**')) {
+                currentSection = 'questions';
+                continue;
+            }
+
+            if (trimmedLine.startsWith('-') && currentSection === 'summary-overview') {
+                const summaryPoint = this._normalizeString(trimmedLine.substring(1));
+                if (summaryPoint && !legacy.summary.includes(summaryPoint)) {
+                    legacy.summary.unshift(summaryPoint);
+                    legacy.summary = legacy.summary.slice(0, 5);
+                }
+                continue;
+            }
+
+            if (trimmedLine.startsWith('-') && currentSection === 'topic') {
+                const bullet = this._normalizeString(trimmedLine.substring(1));
+                if (bullet && !legacy.topic.bullets.includes(bullet)) {
+                    legacy.topic.bullets.push(bullet);
+                    legacy.topic.bullets = legacy.topic.bullets.slice(0, 5);
+                }
+                continue;
+            }
+
+            if (trimmedLine.match(/^\d+\./) && currentSection === 'questions') {
+                const question = this._normalizeString(trimmedLine.replace(/^\d+\.\s*/, ''));
+                if (question && !legacy.actions.includes(question)) {
+                    legacy.actions.push(question);
+                    legacy.actions = legacy.actions.slice(0, 4);
+                }
+            }
+        }
+
+        const summaryText = this._normalizeString(legacy.summary[0], previousResult?.summaryCard?.summary || '');
+        const bullets = this._normalizeStringArray(legacy.topic.bullets, 5, previousResult?.summaryCard?.bullets || []);
+        const followUps = this._normalizeStringArray(legacy.actions, 4, previousResult?.insights?.suggestedFollowUpQuestions || []);
+
+        return this._buildStructuredDataFromNewSchema(
+            {
+                next_sentence_to_say: previousResult?.insights?.nextSentenceToSay || '',
+                question_answer_guidance: previousResult?.insights?.questionAnswerGuidance || '',
+                suggested_follow_up_questions: followUps,
+                summary: summaryText,
+                summary_bullets: bullets,
+            },
+            previousResult
+        );
+    }
+
     async triggerAnalysisIfNeeded() {
         const interval = this.turnsBetweenAnalysis || 3;
         const currentLength = this.conversationHistory.length;
@@ -337,8 +423,6 @@ Keep all points concise and build upon previous analysis if provided.`,
         const targetLengthForRun = Math.floor(snapshotLength / interval) * interval;
         const runId = ++this.analysisRunId;
 
-        console.log(`Triggering analysis #${runId} - ${snapshotLength} conversation texts accumulated (milestone: ${targetLengthForRun})`);
-
         try {
             const data = await this.makeOutlineAndRequests(snapshot);
             if (data) {
@@ -349,23 +433,18 @@ Keep all points concise and build upon previous analysis if provided.`,
                     createdAt: Date.now(),
                 };
 
-                console.log('Sending structured data to renderer');
                 this.sendToRenderer('summary-update', data);
 
-                // Notify callback
                 if (this.onAnalysisComplete) {
                     this.onAnalysisComplete(data);
                 }
 
                 this.lastAnalyzedConversationLength = targetLengthForRun;
-            } else {
-                console.log('No analysis data returned');
             }
         } finally {
             this.analysisInProgress = false;
             if (this.analysisPending) {
                 this.analysisPending = false;
-                // Re-check in case new turns arrived while analysis was running
                 this.triggerAnalysisIfNeeded();
             }
         }
@@ -380,4 +459,4 @@ Keep all points concise and build upon previous analysis if provided.`,
     }
 }
 
-module.exports = SummaryService; 
+module.exports = SummaryService;

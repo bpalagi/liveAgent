@@ -10,10 +10,10 @@ export class SttView extends LitElement {
         /* Inherit font styles from parent */
 
         .transcription-container {
-            padding: 8px 12px 12px 12px;
+            padding: 8px 10px 12px;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 6px;
             position: relative;
             z-index: 1;
         }
@@ -36,31 +36,31 @@ export class SttView extends LitElement {
         }
 
         .stt-message {
-            padding: 8px 12px;
-            border-radius: 12px;
-            max-width: 80%;
+            padding: 8px 10px;
+            border-radius: 6px;
+            max-width: 85%;
             word-wrap: break-word;
             word-break: break-word;
-            line-height: 1.5;
-            font-size: 13px;
-            margin-bottom: 4px;
+            line-height: 1.4;
+            font-size: 11px;
+            margin-bottom: 2px;
             box-sizing: border-box;
+            border: 1px solid rgba(255, 255, 255, 0.18);
         }
 
         .stt-message.them {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.35);
             color: rgba(255, 255, 255, 0.9);
             align-self: flex-start;
-            border-bottom-left-radius: 4px;
             margin-right: auto;
         }
 
         .stt-message.me {
-            background: rgba(0, 122, 255, 0.8);
+            background: rgba(20, 108, 214, 0.55);
             color: white;
             align-self: flex-end;
-            border-bottom-right-radius: 4px;
             margin-left: auto;
+            border-color: rgba(89, 164, 255, 0.7);
         }
 
         .empty-state {
