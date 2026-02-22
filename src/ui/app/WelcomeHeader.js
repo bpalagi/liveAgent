@@ -226,7 +226,7 @@ export class WelcomeHeader extends LitElement {
     }
 
     openPrivacyPolicy() {
-        console.log('🔊 openPrivacyPolicy WelcomeHeader');
+        console.log('openPrivacyPolicy WelcomeHeader');
         if (window.api?.common) {
             window.api.common.openExternal('https://pickle.com/privacy-policy');
         }

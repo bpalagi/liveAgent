@@ -2,15 +2,15 @@ const DOWNLOAD_CHECKSUMS = {
     ollama: {
         dmg: {
             url: 'https://ollama.com/download/Ollama.dmg',
-            sha256: null // TODO: 실제 체크섬 추가 필요 - null일 경우 체크섬 검증 스킵됨
+            sha256: null // TODO: Need to add actual checksum - checksum verification is skipped if null
         },
         exe: {
             url: 'https://ollama.com/download/OllamaSetup.exe',
-            sha256: null // TODO: 실제 체크섬 추가 필요 - null일 경우 체크섬 검증 스킵됨
+            sha256: null // TODO: Need to add actual checksum - checksum verification is skipped if null
         },
         linux: {
             url: 'curl -fsSL https://ollama.com/install.sh | sh',
-            sha256: null // TODO: 실제 체크섬 추가 필요 - null일 경우 체크섬 검증 스킵됨
+            sha256: null // TODO: Need to add actual checksum - checksum verification is skipped if null
         }
     },
     whisper: {
@@ -36,15 +36,15 @@ const DOWNLOAD_CHECKSUMS = {
             'v1.7.6': {
                 mac: {
                     url: 'https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-cpp-v1.7.6-mac-x64.zip',
-                    sha256: null // TODO: 실제 체크섬 추가 필요 - null일 경우 체크섬 검증 스킵됨
+                    sha256: null // TODO: Need to add actual checksum - checksum verification is skipped if null
                 },
                 windows: {
                     url: 'https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-cpp-v1.7.6-win-x64.zip',
-                    sha256: null // TODO: 실제 체크섬 추가 필요 - null일 경우 체크섬 검증 스킵됨
+                    sha256: null // TODO: Need to add actual checksum - checksum verification is skipped if null
                 },
                 linux: {
                     url: 'https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-cpp-v1.7.6-linux-x64.tar.gz',
-                    sha256: null // TODO: 실제 체크섬 추가 필요 - null일 경우 체크섬 검증 스킵됨
+                    sha256: null // TODO: Need to add actual checksum - checksum verification is skipped if null
                 }
             }
         }

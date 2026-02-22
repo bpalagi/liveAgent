@@ -18,17 +18,17 @@ class WhisperService extends EventEmitter {
         super();
         this.serviceName = 'WhisperService';
         
-        // 경로 및 디렉토리
+        // Paths and directories
         this.whisperPath = null;
         this.modelsDir = null;
         this.tempDir = null;
         
-        // 세션 관리 (세션 풀 내장)
+        // Session management (built-in session pool)
         this.sessionPool = [];
         this.activeSessions = new Map();
         this.maxSessions = 3;
         
-        // 설치 상태
+        // Installation state
         this.installState = {
             isInstalled: false,
             isInitialized: false
@@ -42,7 +42,7 @@ class WhisperService extends EventEmitter {
         this.liveVenvPath = path.join(os.homedir(), '.glass', 'whisper-live-venv');
         this._liveServerStartPromise = null;
         
-        // 사용 가능한 모델
+        // Available models
         this.availableModels = {
             'whisper-tiny': {
                 name: 'Tiny',
@@ -291,7 +291,7 @@ class WhisperService extends EventEmitter {
             this.modelsDir = path.join(whisperDir, 'models');
             this.tempDir = path.join(whisperDir, 'temp');
             
-            // Windows에서는 .exe 확장자 필요
+            // Windows needs .exe extension
             const platform = this.getPlatform();
             const whisperExecutable = platform === 'win32' ? 'whisper-whisper.exe' : 'whisper';
             this.whisperPath = path.join(whisperDir, 'bin', whisperExecutable);
@@ -303,7 +303,7 @@ class WhisperService extends EventEmitter {
             console.log('[WhisperService] Initialized successfully');
         } catch (error) {
             console.error('[WhisperService] Initialization failed:', error);
-            // Emit error event - LocalAIManager가 처리
+            // Emit error event - LocalAIManager will handle
             this.emit('error', {
                 errorType: 'initialization-failed',
                 error: error.message
@@ -465,7 +465,7 @@ class WhisperService extends EventEmitter {
         const modelPath = await this.getModelPath(modelId);
         const checksumInfo = DOWNLOAD_CHECKSUMS.whisper.models[modelId];
         
-        // Emit progress event - LocalAIManager가 처리
+        // Emit progress event - LocalAIManager will handle
         this.emit('install-progress', { 
             model: modelId, 
             progress: 0 
@@ -475,7 +475,7 @@ class WhisperService extends EventEmitter {
             expectedChecksum: checksumInfo?.sha256,
             modelId, // pass modelId to LocalAIServiceBase for event handling
             onProgress: (progress) => {
-                // Emit progress event - LocalAIManager가 처리
+                // Emit progress event - LocalAIManager will handle
                 this.emit('install-progress', { 
                     model: modelId, 
                     progress 
@@ -664,12 +664,15 @@ class WhisperService extends EventEmitter {
             await spawnAsync(systemPython, ['-m', 'venv', this.liveVenvPath]);
             const pip = path.join(this.liveVenvPath, 'bin', 'pip');
             console.log('[WhisperService] Installing whisper-live...');
-            await spawnAsync(pip, ['install', 'whisper-live']);
+            // Install a specific version known to work without tqdm issues
+            await spawnAsync(pip, ['install', 'whisper-live==1.0.9']);
+            // Also ensure tqdm is properly installed
+            await spawnAsync(pip, ['install', '--upgrade', 'tqdm']);
             return true;
         }
     }
 
-    async startLiveServer(model = 'small.en') {
+    async startLiveServer(model = 'medium.en') {
         // If server is already running with the same model, just return
         if (this.isLiveServerRunning() && this.currentServerModel === model) {
             console.log('[WhisperService] WhisperLive server already running with the same model');
@@ -697,8 +700,31 @@ class WhisperService extends EventEmitter {
         }
     }
 
-    async _doStartLiveServer(model = 'small.en') {
+    async _doStartLiveServer(model = 'medium.en') {
         await this.ensureLiveVenv();
+        
+        // Map faster-whisper model names back to our model IDs for downloading
+        const modelIdMap = {
+            'tiny.en': 'whisper-tiny',
+            'base.en': 'whisper-base', 
+            'small.en': 'whisper-small',
+            'medium.en': 'whisper-medium'
+        };
+        const modelId = modelIdMap[model] || 'whisper-medium';
+        
+        // Ensure the model is downloaded before starting server
+        console.log(`[WhisperService] Ensuring model ${modelId} is downloaded...`);
+        try {
+            await this.ensureModelAvailable(modelId);
+        } catch (error) {
+            console.warn(`[WhisperService] Failed to ensure model ${modelId} is available: ${error.message}`);
+            // Fallback to tiny model if medium fails
+            if (modelId === 'whisper-medium') {
+                console.log('[WhisperService] Falling back to whisper-tiny model...');
+                await this.ensureModelAvailable('whisper-tiny');
+                model = 'tiny.en';
+            }
+        }
 
         const pythonPath = path.join(this.liveVenvPath, 'bin', 'python3');
         const serverScript = path.join(__dirname, '..', 'ai', 'providers', 'whisper_live_server.py');
@@ -708,20 +734,55 @@ class WhisperService extends EventEmitter {
         this.liveServerProcess = spawn(pythonPath, [
             serverScript,
             '--port', String(this.liveServerPort),
-            '--model', model
+            '--model', model,
+            '--vad_threshold', '0.3'  // Lower threshold to be less aggressive about filtering speech
         ], {
             stdio: ['ignore', 'pipe', 'pipe'],
-            env: { ...process.env, PYTHONUNBUFFERED: '1' }
+            env: { ...process.env, PYTHONUNBUFFERED: '1', 'PYTHONIOENCODING': 'utf-8' }
         });
 
+        let serverReady = false;
+        const outputBuffers = { stdout: '', stderr: '' };
+
         this.liveServerProcess.stdout.on('data', (data) => {
-            const msg = data.toString().trim();
-            if (msg) console.log(`[WhisperLive-stdout] ${msg}`);
+            const output = data.toString();
+            outputBuffers.stdout += output;
+            console.log(`[WhisperLive-stdout] ${output.trim()}`);
+            
+            if (output.includes('Starting server on port')) {
+                serverReady = true;
+                this.liveServerReady = true;
+            }
         });
 
         this.liveServerProcess.stderr.on('data', (data) => {
-            const msg = data.toString().trim();
-            if (msg && !msg.includes('INFO:faster_whisper:')) console.log(`[WhisperLive-stderr] ${msg}`);
+            const output = data.toString();
+            outputBuffers.stderr += output;
+            
+            // Filter out common faster_whisper INFO logs that are too noisy
+            const lines = output.trim().split('\n');
+            for (const line of lines) {
+                if (line.includes('INFO:faster_whisper:Processing audio with duration') ||
+                    line.includes('INFO:faster_whisper:VAD filter removed') ||
+                    line.includes('INFO:faster_whisper:Detected language') ||
+                    line.includes('INFO:faster_whisper:Processing segment')) {
+                    // Skip these noisy logs
+                    continue;
+                }
+                if (line.trim()) {
+                    console.error(`[WhisperLive-stderr] ${line.trim()}`);
+                }
+            }
+            
+            // Check for specific errors
+            if (output.includes('Failed to load model')) {
+                console.error(`[WhisperService] Model loading failed: ${output}`);
+            }
+            
+            if (output.includes('New client connected') && !serverReady) {
+                serverReady = true;
+                this.liveServerReady = true;
+            }
         });
 
         this.liveServerProcess.on('close', (code) => {
@@ -730,30 +791,48 @@ class WhisperService extends EventEmitter {
             this.liveServerProcess = null;
         });
 
-        // Wait for server to be ready by attempting WebSocket connection
+        return this.waitForServerReady();
+    }
+
+    async waitForServerReady(maxAttempts = 30, delayMs = 2000) {
+        if (this.liveServerReady) {
+            return true;
+        }
+        
+        console.log(`[WhisperService] Waiting for WhisperLive server to be ready...`);
         const WebSocket = require('ws');
-        const maxAttempts = 30;
+        
         for (let i = 0; i < maxAttempts; i++) {
             try {
                 await new Promise((resolve, reject) => {
                     const ws = new WebSocket(`ws://localhost:${this.liveServerPort}`);
-                    const timeout = setTimeout(() => { ws.close(); reject(new Error('timeout')); }, 1000);
+                    const timeout = setTimeout(() => { 
+                        ws.close(); 
+                        reject(new Error('timeout')); 
+                    }, 1000);
+                    
                     ws.on('open', () => {
                         clearTimeout(timeout);
-                        // Send a minimal config then close - just testing connectivity
                         ws.close();
                         resolve();
                     });
-                    ws.on('error', (err) => { clearTimeout(timeout); reject(err); });
+                    
+                    ws.on('error', (err) => { 
+                        clearTimeout(timeout); 
+                        reject(err); 
+                    });
                 });
+                
                 this.liveServerReady = true;
                 console.log(`[WhisperService] WhisperLive server ready on port ${this.liveServerPort}`);
-                return;
-            } catch {
-                await new Promise(r => setTimeout(r, 2000));
+                return true;
+            } catch (error) {
+                if (i === maxAttempts - 1) {
+                    throw new Error('WhisperLive server failed to start within timeout');
+                }
+                await new Promise(r => setTimeout(r, delayMs));
             }
         }
-        throw new Error('WhisperLive server failed to start within timeout');
     }
 
     async stopLiveServer() {
@@ -782,153 +861,153 @@ class WhisperService extends EventEmitter {
     }
 
     async installMacOS() {
-        throw new Error('Binary installation not available for macOS. Please install Homebrew and run: brew install whisper-cpp');
-    }
+            throw new Error('Binary installation not available for macOS. Please install Homebrew and run: brew install whisper-cpp');
+        }
 
-    async installWindows() {
-        console.log('[WhisperService] Installing Whisper on Windows...');
-        const version = 'v1.7.6';
-        const binaryUrl = `https://github.com/ggml-org/whisper.cpp/releases/download/${version}/whisper-bin-x64.zip`;
-        const tempFile = path.join(this.tempDir, 'whisper-binary.zip');
-        
-        try {
-            console.log('[WhisperService] Step 1: Downloading Whisper binary...');
-            await this.downloadWithRetry(binaryUrl, tempFile);
+        async installWindows() {
+            console.log('[WhisperService] Installing Whisper on Windows...');
+            const version = 'v1.7.6';
+            const binaryUrl = `https://github.com/ggml-org/whisper.cpp/releases/download/${version}/whisper-bin-x64.zip`;
+            const tempFile = path.join(this.tempDir, 'whisper-binary.zip');
             
-            console.log('[WhisperService] Step 2: Extracting archive...');
-            const extractDir = path.join(this.tempDir, 'extracted');
-            
-            // 임시 압축 해제 디렉토리 생성
-            await fsPromises.mkdir(extractDir, { recursive: true });
-            
-            // PowerShell 명령에서 경로를 올바르게 인용
-            const expandCommand = `Expand-Archive -Path "${tempFile}" -DestinationPath "${extractDir}" -Force`;
-            await spawnAsync('powershell', ['-command', expandCommand]);
-            
-            console.log('[WhisperService] Step 3: Finding and moving whisper executable...');
-            
-            // 압축 해제된 디렉토리에서 whisper.exe 파일 찾기
-            const whisperExecutables = await this.findWhisperExecutables(extractDir);
-            
-            if (whisperExecutables.length === 0) {
-                throw new Error('whisper.exe not found in extracted files');
-            }
-            
-            // 첫 번째로 찾은 whisper.exe를 목표 위치로 복사
-            const sourceExecutable = whisperExecutables[0];
-            const targetDir = path.dirname(this.whisperPath);
-            await fsPromises.mkdir(targetDir, { recursive: true });
-            await fsPromises.copyFile(sourceExecutable, this.whisperPath);
-            
-            console.log('[WhisperService] Step 4: Verifying installation...');
-            
-            // 설치 검증
-            await fsPromises.access(this.whisperPath, fs.constants.F_OK);
-            
-            // whisper.exe 실행 테스트
             try {
-                await spawnAsync(this.whisperPath, ['--help']);
-                console.log('[WhisperService] Whisper executable verified successfully');
-            } catch (testError) {
-                console.warn('[WhisperService] Whisper executable test failed, but file exists:', testError.message);
-            }
-            
-            console.log('[WhisperService] Step 5: Cleanup...');
-            
-            // 임시 파일 정리
-            await fsPromises.unlink(tempFile).catch(() => {});
-            await this.removeDirectory(extractDir).catch(() => {});
-            
-            console.log('[WhisperService] Whisper installed successfully on Windows');
-            return true;
-            
-        } catch (error) {
-            console.error('[WhisperService] Windows installation failed:', error);
-            
-            // 실패 시 임시 파일 정리
-            await fsPromises.unlink(tempFile).catch(() => {});
-            await this.removeDirectory(path.join(this.tempDir, 'extracted')).catch(() => {});
-            
-            throw new Error(`Failed to install Whisper on Windows: ${error.message}`);
-        }
-    }
-    
-    // 압축 해제된 디렉토리에서 whisper.exe 파일들을 재귀적으로 찾기
-    async findWhisperExecutables(dir) {
-        const executables = [];
-        
-        try {
-            const items = await fsPromises.readdir(dir, { withFileTypes: true });
-            
-            for (const item of items) {
-                const fullPath = path.join(dir, item.name);
+                console.log('[WhisperService] Step 1: Downloading Whisper binary...');
+                await this.downloadWithRetry(binaryUrl, tempFile);
                 
-                if (item.isDirectory()) {
-                    const subExecutables = await this.findWhisperExecutables(fullPath);
-                    executables.push(...subExecutables);
-                } else if (item.isFile() && (item.name === 'whisper-whisper.exe' || item.name === 'whisper.exe' || item.name === 'main.exe')) {
-                    executables.push(fullPath);
-                }
-            }
-        } catch (error) {
-            console.warn('[WhisperService] Error reading directory:', dir, error.message);
-        }
-        
-        return executables;
-    }
-    
-    // 디렉토리 재귀적 삭제
-    async removeDirectory(dir) {
-        try {
-            const items = await fsPromises.readdir(dir, { withFileTypes: true });
-            
-            for (const item of items) {
-                const fullPath = path.join(dir, item.name);
+                console.log('[WhisperService] Step 2: Extracting archive...');
+                const extractDir = path.join(this.tempDir, 'extracted');
                 
-                if (item.isDirectory()) {
-                    await this.removeDirectory(fullPath);
-                } else {
-                    await fsPromises.unlink(fullPath);
+                // Create temporary extraction directory
+                await fsPromises.mkdir(extractDir, { recursive: true });
+                
+                // Quote paths correctly in PowerShell command
+                const expandCommand = `Expand-Archive -Path "${tempFile}" -DestinationPath "${extractDir}" -Force`;
+                await spawnAsync('powershell', ['-command', expandCommand]);
+                
+                console.log('[WhisperService] Step 3: Finding and moving whisper executable...');
+                
+                // Find whisper.exe file in extracted directory
+                const whisperExecutables = await this.findWhisperExecutables(extractDir);
+                
+                if (whisperExecutables.length === 0) {
+                    throw new Error('whisper.exe not found in extracted files');
                 }
+                
+                // Copy the first found whisper.exe to target location
+                const sourceExecutable = whisperExecutables[0];
+                const targetDir = path.dirname(this.whisperPath);
+                await fsPromises.mkdir(targetDir, { recursive: true });
+                await fsPromises.copyFile(sourceExecutable, this.whisperPath);
+                
+                console.log('[WhisperService] Step 4: Verifying installation...');
+                
+                // Verify installation
+                await fsPromises.access(this.whisperPath, fs.constants.F_OK);
+                
+                // Test whisper.exe execution
+                try {
+                    await spawnAsync(this.whisperPath, ['--help']);
+                    console.log('[WhisperService] Whisper executable verified successfully');
+                } catch (testError) {
+                    console.warn('[WhisperService] Whisper executable test failed, but file exists:', testError.message);
+                }
+                
+                console.log('[WhisperService] Step 5: Cleanup...');
+                
+                // Clean up temporary files
+                await fsPromises.unlink(tempFile).catch(() => {});
+                await this.removeDirectory(extractDir).catch(() => {});
+                
+                console.log('[WhisperService] Whisper installed successfully on Windows');
+                return true;
+                
+            } catch (error) {
+                console.error('[WhisperService] Windows installation failed:', error);
+                
+                // Clean up temporary files on failure
+                await fsPromises.unlink(tempFile).catch(() => {});
+                await this.removeDirectory(path.join(this.tempDir, 'extracted')).catch(() => {});
+                
+                throw new Error(`Failed to install Whisper on Windows: ${error.message}`);
+            }
+        }
+        
+        // Recursively find whisper.exe files in extracted directory
+        async findWhisperExecutables(dir) {
+            const executables = [];
+            
+            try {
+                const items = await fsPromises.readdir(dir, { withFileTypes: true });
+                
+                for (const item of items) {
+                    const fullPath = path.join(dir, item.name);
+                    
+                    if (item.isDirectory()) {
+                        const subExecutables = await this.findWhisperExecutables(fullPath);
+                        executables.push(...subExecutables);
+                    } else if (item.isFile() && (item.name === 'whisper-whisper.exe' || item.name === 'whisper.exe' || item.name === 'main.exe')) {
+                        executables.push(fullPath);
+                    }
+                }
+            } catch (error) {
+                console.warn('[WhisperService] Error reading directory:', dir, error.message);
             }
             
-            await fsPromises.rmdir(dir);
-        } catch (error) {
-            console.warn('[WhisperService] Error removing directory:', dir, error.message);
+            return executables;
         }
-    }
-
-    async installLinux() {
-        console.log('[WhisperService] Installing Whisper on Linux...');
-        const version = 'v1.7.6';
-        const binaryUrl = `https://github.com/ggml-org/whisper.cpp/releases/download/${version}/whisper-cpp-${version}-linux-x64.tar.gz`;
-        const tempFile = path.join(this.tempDir, 'whisper-binary.tar.gz');
         
-        try {
-            await this.downloadWithRetry(binaryUrl, tempFile);
-            const extractDir = path.dirname(this.whisperPath);
-            await spawnAsync('tar', ['-xzf', tempFile, '-C', extractDir, '--strip-components=1']);
-            await spawnAsync('chmod', ['+x', this.whisperPath]);
-            await fsPromises.unlink(tempFile);
-            console.log('[WhisperService] Whisper installed successfully on Linux');
-            return true;
-        } catch (error) {
-            console.error('[WhisperService] Linux installation failed:', error);
-            throw new Error(`Failed to install Whisper on Linux: ${error.message}`);
+        // Recursive directory deletion
+        async removeDirectory(dir) {
+            try {
+                const items = await fsPromises.readdir(dir, { withFileTypes: true });
+                
+                for (const item of items) {
+                    const fullPath = path.join(dir, item.name);
+                    
+                    if (item.isDirectory()) {
+                        await this.removeDirectory(fullPath);
+                    } else {
+                        await fsPromises.unlink(fullPath);
+                    }
+                }
+                
+                await fsPromises.rmdir(dir);
+            } catch (error) {
+                console.warn('[WhisperService] Error removing directory:', dir, error.message);
+            }
         }
-    }
 
-    async shutdownMacOS(force) {
-        return true;
-    }
+        async installLinux() {
+            console.log('[WhisperService] Installing Whisper on Linux...');
+            const version = 'v1.7.6';
+            const binaryUrl = `https://github.com/ggml-org/whisper.cpp/releases/download/${version}/whisper-cpp-${version}-linux-x64.tar.gz`;
+            const tempFile = path.join(this.tempDir, 'whisper-binary.tar.gz');
+            
+            try {
+                await this.downloadWithRetry(binaryUrl, tempFile);
+                const extractDir = path.dirname(this.whisperPath);
+                await spawnAsync('tar', ['-xzf', tempFile, '-C', extractDir, '--strip-components=1']);
+                await spawnAsync('chmod', ['+x', this.whisperPath]);
+                await fsPromises.unlink(tempFile);
+                console.log('[WhisperService] Whisper installed successfully on Linux');
+                return true;
+            } catch (error) {
+                console.error('[WhisperService] Linux installation failed:', error);
+                throw new Error(`Failed to install Whisper on Linux: ${error.message}`);
+            }
+        }
 
-    async shutdownWindows(force) {
-        return true;
-    }
+        async shutdownMacOS(force) {
+            return true;
+        }
 
-    async shutdownLinux(force) {
-        return true;
-    }
+        async shutdownWindows(force) {
+            return true;
+        }
+
+        async shutdownLinux(force) {
+            return true;
+        }
 }
 
 // WhisperSession class
@@ -953,23 +1032,23 @@ class WhisperSession {
     }
 
     startProcessingLoop() {
-        // TODO: 실제 처리 루프 구현
+        // TODO: Implement actual processing loop
     }
 
     async cleanup() {
-        // 임시 파일 정리
+        // Clean up temporary files
         await this.cleanupTempFiles();
     }
 
     async cleanupTempFiles() {
-        // TODO: 임시 파일 정리 구현
+        // TODO: Implement temporary file cleanup
     }
 
     async destroy() {
         if (this.process) {
             this.process.kill();
         }
-        // 임시 파일 정리
+        // Clean up temporary files
         await this.cleanupTempFiles();
     }
 }

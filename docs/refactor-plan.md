@@ -1,7 +1,7 @@
 # Refactor Plan: Non-Window Logic Migration from windowManager.js
 
 ## Goal
-`windowManager.js`를 순수 창 관리 모듈로 만들기 위해 비즈니스 로직을 해당 서비스와 `featureBridge.js`로 이전.
+To make `windowManager.js` a pure window management module, transfer business logic to the corresponding service and `featureBridge.js`.
 
 ## Steps (based on initial plan)
 1. **Shortcuts**: Completed. Logic moved to `shortcutsService.js` and IPC to `featureBridge.js`. Used `internalBridge` for coordination.

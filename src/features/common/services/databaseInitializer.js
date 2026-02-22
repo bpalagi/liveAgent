@@ -8,7 +8,7 @@ class DatabaseInitializer {
     constructor() {
         this.isInitialized = false;
         
-        // 최종적으로 사용될 DB 경로 (쓰기 가능한 위치)
+        // Final DB path to be used (writable location)
         const userDataPath = app.getPath('userData');
         // In both development and production mode, the database is stored in the userData directory:
         //   macOS: ~/Library/Application Support/Glass/pickleglass.db
@@ -26,19 +26,19 @@ class DatabaseInitializer {
         if (!fs.existsSync(this.dbPath)) {
             console.log(`[DB] Database not found at ${this.dbPath}. Preparing to create new database...`);
 
-            // userData 디렉토리 생성 (없을 경우)
+            // Create userData directory (if it doesn't exist)
             if (!fs.existsSync(this.dataDir)) {
                 fs.mkdirSync(this.dataDir, { recursive: true });
             }
 
-            // 패키지에 번들된 초기 DB가 있으면 복사, 없으면 빈 파일을 생성하도록 둔다.
+            // If there's an initial DB bundled in the package, copy it; otherwise, leave it to create an empty file.
             if (fs.existsSync(this.sourceDbPath)) {
                 try {
                     fs.copyFileSync(this.sourceDbPath, this.dbPath);
                     console.log(`[DB] Bundled database copied to ${this.dbPath}`);
                 } catch (error) {
                     console.error(`[DB] Failed to copy bundled database:`, error);
-                    // 복사 실패 시에도 새 DB를 생성할 수 있도록 계속 진행
+                    // Continue to create new DB even if copy fails
                 }
             } else {
                 console.log('[DB] No bundled DB found – a fresh database will be created.');
@@ -55,7 +55,7 @@ class DatabaseInitializer {
         try {
             this.ensureDatabaseExists();
 
-            sqliteClient.connect(this.dbPath); // DB 경로를 인자로 전달
+            sqliteClient.connect(this.dbPath); // Pass DB path as argument
             
             // This single call will now synchronize the schema and then init default data.
             await sqliteClient.initTables();

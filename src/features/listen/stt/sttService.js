@@ -5,9 +5,10 @@ const modelStateService = require('../../common/services/modelStateService');
 
 const COMPLETION_DEBOUNCE_MS = 2000;
 // Whisper emits complete sentences — use a shorter debounce for faster display
-const WHISPER_DEBOUNCE_MS = 500;
+// Reduced for more frequent updates with system audio
+const WHISPER_DEBOUNCE_MS = 300;
 // Minimum delay between sentence-based flushes to prevent fragmentation
-const SENTENCE_FLUSH_DELAY_MS = 300;
+const SENTENCE_FLUSH_DELAY_MS = 200;
 
 // ── Whisper noise / hallucination filter ─────────────────────────────────────────
 const WHISPER_NOISE_TAGS = [
@@ -86,7 +87,7 @@ class SttService {
     }
 
     sendToRenderer(channel, data) {
-        // Listen 관련 이벤트는 Listen 윈도우에만 전송 (Ask 윈도우 충돌 방지)
+        // Send Listen-related events only to Listen window (to prevent Ask window conflicts)
         const { windowPool } = require('../../../window/windowManager');
         const listenWindow = windowPool?.get('listen');
         
@@ -325,12 +326,12 @@ class SttService {
                 this.noteSpeakerActivity('Me');
 
                 if (isFinal) {
-                    // 최종 결과가 도착하면, 현재 진행중인 부분 발화는 비우고
-                    // 최종 텍스트로 debounce를 실행합니다.
+                    // When the final result arrives, clear the current partial utterance and
+                    // run debounce with the final text.
                     this.myCurrentUtterance = ''; 
                     this.debounceMyCompletion(text); 
                 } else {
-                    // 부분 결과(interim)인 경우, 화면에 실시간으로 업데이트합니다.
+                    // If it's a partial result (interim), update the screen in real-time.
                     if (this.myCompletionTimer) clearTimeout(this.myCompletionTimer);
                     this.myCompletionTimer = null;
 

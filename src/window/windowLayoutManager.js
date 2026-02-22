@@ -19,7 +19,7 @@ function getCurrentDisplay(window) {
 
 class WindowLayoutManager {
     /**
-     * @param {Map<string, BrowserWindow>} windowPool - 관리할 창들의 맵
+     * @param {Map<string, BrowserWindow>} windowPool - Map of windows to manage
      */
     constructor(windowPool) {
         this.windowPool = windowPool;
@@ -126,7 +126,7 @@ class WindowLayoutManager {
         return { ...currentBounds, height: adjustedHeight };
     }
     
-    // 기존 getTargetBoundsForFeatureWindows를 이 함수로 대체합니다.
+    // Replace getTargetBoundsForFeatureWindows with this function
     calculateFeatureWindowLayout(visibility, headerBoundsOverride = null) {
         const header = this.windowPool.get('header');
         const headerBounds = headerBoundsOverride || (header ? header.getBounds() : null);
@@ -231,7 +231,7 @@ class WindowLayoutManager {
     calculateStepMovePosition(header, direction) {
         if (!header) return null;
         const currentBounds = header.getBounds();
-        const stepSize = 80; // 이동 간격
+        const stepSize = 80; // Movement interval
         let targetX = currentBounds.x;
         let targetY = currentBounds.y;
     

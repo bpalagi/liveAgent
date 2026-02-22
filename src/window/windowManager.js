@@ -395,7 +395,7 @@ async function handleWindowVisibilityRequest(windowPool, layoutManager, movement
             movementManager.fade(win, { to: 0, onComplete: () => win.hide() });
             movementManager.animateWindowPosition(win, targetPos);
             
-            // 다른 창들도 새 레이아웃으로 애니메이션
+            // Animate other windows with new layout
             const otherWindowsLayout = { ...targetLayout };
             delete otherWindowsLayout[name];
             movementManager.animateLayout(otherWindowsLayout);
@@ -743,7 +743,7 @@ function setupIpcHandlers(windowPool, layoutManager) {
             const primaryDisplay = screen.getPrimaryDisplay();
             const newPosition = layoutManager.calculateNewPositionForDisplay(header, primaryDisplay.id);
             if (newPosition) {
-                // 복구 상황이므로 애니메이션 없이 즉시 이동
+                // Move immediately without animation for recovery
                 header.setPosition(newPosition.x, newPosition.y, false);
                 updateChildWindowLayouts(false);
             }
@@ -751,7 +751,7 @@ function setupIpcHandlers(windowPool, layoutManager) {
     });
 
     screen.on('display-metrics-changed', (event, display, changedMetrics) => {
-        // 레이아웃 업데이트 함수를 새 버전으로 호출
+        // Call layout update function with new version
         updateChildWindowLayouts(false);
     });
 }

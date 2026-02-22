@@ -31,7 +31,7 @@ contextBridge.exposeInMainWorld('api', {
   apiKeyHeader: {
     // Model & Provider Management
     getProviderConfig: () => ipcRenderer.invoke('model:get-provider-config'),
-    // LocalAI 통합 API
+    // LocalAI integrated API
     getLocalAIStatus: (service) => ipcRenderer.invoke('localai:get-status', service),
     installLocalAI: (service, options) => ipcRenderer.invoke('localai:install', { service, options }),
     startLocalAIService: (service) => ipcRenderer.invoke('localai:start-service', service),
@@ -39,7 +39,7 @@ contextBridge.exposeInMainWorld('api', {
     installLocalAIModel: (service, modelId, options) => ipcRenderer.invoke('localai:install-model', { service, modelId, options }),
     getInstalledModels: (service) => ipcRenderer.invoke('localai:get-installed-models', service),
     
-    // Legacy support (호환성 위해 유지)
+    // Legacy support (maintained for compatibility)
     getOllamaStatus: () => ipcRenderer.invoke('localai:get-status', 'ollama'),
     getModelSuggestions: () => ipcRenderer.invoke('ollama:get-model-suggestions'),
     ensureOllamaReady: () => ipcRenderer.invoke('ollama:ensure-ready'),
@@ -56,7 +56,7 @@ contextBridge.exposeInMainWorld('api', {
     moveHeaderTo: (x, y) => ipcRenderer.invoke('move-header-to', x, y),
     
     // Listeners
-    // LocalAI 통합 이벤트 리스너
+    // LocalAI integrated event listeners
     onLocalAIProgress: (callback) => ipcRenderer.on('localai:install-progress', callback),
     removeOnLocalAIProgress: (callback) => ipcRenderer.removeListener('localai:install-progress', callback),
     onLocalAIComplete: (callback) => ipcRenderer.on('localai:installation-complete', callback),
@@ -69,7 +69,7 @@ contextBridge.exposeInMainWorld('api', {
 
     // Remove all listeners (for cleanup)
     removeAllListeners: () => {
-      // LocalAI 통합 이벤트
+      // LocalAI integrated events
       ipcRenderer.removeAllListeners('localai:install-progress');
       ipcRenderer.removeAllListeners('localai:installation-complete');
       ipcRenderer.removeAllListeners('localai:error-notification');
@@ -256,7 +256,7 @@ contextBridge.exposeInMainWorld('api', {
     removeOnPresetsUpdated: (callback) => ipcRenderer.removeListener('presets-updated', callback),
     onShortcutsUpdated: (callback) => ipcRenderer.on('shortcuts-updated', callback),
     removeOnShortcutsUpdated: (callback) => ipcRenderer.removeListener('shortcuts-updated', callback),
-    // 통합 LocalAI 이벤트 사용
+    // Use integrated LocalAI events
     onLocalAIInstallProgress: (callback) => ipcRenderer.on('localai:install-progress', callback),
     removeOnLocalAIInstallProgress: (callback) => ipcRenderer.removeListener('localai:install-progress', callback),
     onLocalAIInstallationComplete: (callback) => ipcRenderer.on('localai:installation-complete', callback),

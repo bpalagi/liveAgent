@@ -325,9 +325,9 @@ export class SettingsView extends LitElement {
     }
 
     updateScrollHeight() {
-        // Electron 일부 시점에서 window.innerHeight 가 0 으로 보고되는 버그 보호
+        // Protect against bug where window.innerHeight is reported as 0 in some Electron contexts
         const rawHeight = window.innerHeight || (window.screen ? window.screen.height : 0);
-        const MIN_HEIGHT = 300; // 최소 보장 높이
+        const MIN_HEIGHT = 300; // Minimum guaranteed height
         const maxHeight = Math.max(MIN_HEIGHT, rawHeight);
 
         this.style.maxHeight = `${maxHeight}px`;
@@ -366,7 +366,7 @@ export class SettingsView extends LitElement {
             'Up': '↑', 'Down': '↓', 'Left': '←', 'Right': '→'
         };
 
-        // scrollDown/scrollUp의 특수 처리
+        // Special handling for scrollDown/scrollUp
         if (accelerator.includes('↕')) {
             const keys = accelerator.replace('↕','').split('+');
             keys.push('↕');

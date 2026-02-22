@@ -10,7 +10,7 @@ class ModelStateService extends EventEmitter {
     constructor() {
         super();
         this.authService = authService;
-        // electron-store는 오직 레거시 데이터 마이그레이션 용도로만 사용됩니다.
+        // electron-store is used only for legacy data migration purposes.
         this.store = new Store({ name: 'pickle-glass-model-state' });
     }
 
@@ -122,10 +122,12 @@ class ModelStateService extends EventEmitter {
 
         // Only trigger auto-selection if the service is actually available (installed AND running)
         // This prevents unnecessary model switches when services are not running
+        // Note: We only auto-select LLM models now - STT models remain constant
         const types = [];
-        if (service === 'whisper' && state.installed) {
-            types.push('stt');
-        }
+        // STT models are no longer auto-switched when services become available
+        // if (service === 'whisper' && state.installed) {
+        //     types.push('stt');
+        // }
         
         if (types.length > 0) {
             await this._autoSelectAvailableModels(types);
@@ -153,7 +155,8 @@ class ModelStateService extends EventEmitter {
     async _autoSelectAvailableModels(forceReselectionForTypes = [], isInitialBoot = false) {
         console.log(`[ModelStateService] Running auto-selection. Force re-selection for: [${forceReselectionForTypes.join(', ')}]`);
         const { apiKeys, selectedModels } = await this.getLiveState();
-        const types = ['llm', 'stt'];
+        // Only auto-select LLM models - STT models should remain constant after initial selection
+        const types = ['llm'];
 
         for (const type of types) {
             const currentModelId = selectedModels[type];
@@ -193,9 +196,14 @@ class ModelStateService extends EventEmitter {
                         if (type === 'stt') {
                             const whisperModel = availableModels.find(model => {
                                 const provider = this.getProviderForModel(model.id, type);
+                                return provider === 'whisper' && model.id === 'whisper-medium';
+                            });
+                            // If medium not found, get any whisper model
+                            const anyWhisperModel = whisperModel || availableModels.find(model => {
+                                const provider = this.getProviderForModel(model.id, type);
                                 return provider === 'whisper';
                             });
-                            newModel = whisperModel || availableModels[0];
+                            newModel = anyWhisperModel || availableModels[0];
                             console.log(`[ModelStateService] Force re-selecting STT: chose ${newModel.id} (provider: ${this.getProviderForModel(newModel.id, type)})`);
                         } else {
                             // For LLM, prefer API providers
@@ -208,12 +216,17 @@ class ModelStateService extends EventEmitter {
                     } else {
                         // On initial/normal selection, prefer API providers over local (except Whisper for STT)
                         if (type === 'stt') {
-                            // For STT, Whisper is preferred
+                            // For STT, Whisper medium is preferred
                             const whisperModel = availableModels.find(model => {
+                                const provider = this.getProviderForModel(model.id, type);
+                                return provider === 'whisper' && model.id === 'whisper-medium';
+                            });
+                            // If medium not found, get any whisper model
+                            const anyWhisperModel = whisperModel || availableModels.find(model => {
                                 const provider = this.getProviderForModel(model.id, type);
                                 return provider === 'whisper';
                             });
-                            newModel = whisperModel || availableModels[0];
+                            newModel = anyWhisperModel || availableModels[0];
                             console.log(`[ModelStateService] Normal STT selection: chose ${newModel.id} (provider: ${this.getProviderForModel(newModel.id, type)})`);
                         } else {
                             // For LLM, prefer API providers
@@ -239,26 +252,27 @@ class ModelStateService extends EventEmitter {
     async setFirebaseVirtualKey(virtualKey) {
         console.log(`[ModelStateService] Setting Firebase virtual key.`);
 
-        // 키를 설정하기 전에, 이전에 openai-glass 키가 있었는지 확인합니다.
+        // Before setting the key, check if the previous openai-glass key existed.
         const previousSettings = await providerSettingsRepository.getByProvider('openai-glass');
         const wasPreviouslyConfigured = !!previousSettings?.api_key;
 
-        // 항상 새로운 가상 키로 업데이트합니다.
+        // Always update with the new virtual key.
         await this.setApiKey('openai-glass', virtualKey);
 
         if (virtualKey) {
-            // 이전에 설정된 적이 없는 경우 (최초 로그인)에만 모델을 강제로 변경합니다.
+            // Only set default models on first-time setup
             if (!wasPreviouslyConfigured) {
+                // This now uses whisper-medium as the default STT model
                 console.log('[ModelStateService] First-time setup for openai-glass, setting default models.');
                 const llmModel = PROVIDERS['openai-glass']?.llmModels[0];
-                const sttModel = PROVIDERS['openai-glass']?.sttModels[0];
                 if (llmModel) await this.setSelectedModel('llm', llmModel.id);
-                if (sttModel) await this.setSelectedModel('stt', sttModel.id);
+                // Override STT to use whisper-medium for better quality
+                await this.setSelectedModel('stt', 'whisper-medium');
             } else {
                 console.log('[ModelStateService] openai-glass key updated, but respecting user\'s existing model selection.');
             }
         } else {
-            // 로그아웃 시, 현재 활성화된 모델이 openai-glass인 경우에만 다른 모델로 전환합니다.
+            // On logout, switch to another model only if the currently active model is openai-glass.
             const selected = await this.getSelectedModels();
             const llmProvider = this.getProviderForModel(selected.llm, 'llm');
             const sttProvider = this.getProviderForModel(selected.stt, 'stt');
@@ -268,8 +282,12 @@ class ModelStateService extends EventEmitter {
             if (sttProvider === 'openai-glass') typesToReselect.push('stt');
 
             if (typesToReselect.length > 0) {
-                console.log('[ModelStateService] Logged out, re-selecting models for:', typesToReselect.join(', '));
-                await this._autoSelectAvailableModels(typesToReselect);
+                // Only auto-select LLM models - STT models remain constant
+                const llmTypesToReselect = typesToReselect.filter(t => t === 'llm');
+                if (llmTypesToReselect.length > 0) {
+                    console.log('[ModelStateService] Logged out, re-selecting LLM models');
+                    await this._autoSelectAvailableModels(llmTypesToReselect);
+                }
             }
         }
     }
@@ -280,7 +298,7 @@ class ModelStateService extends EventEmitter {
             throw new Error('Provider is required');
         }
 
-        // 'openai-glass'는 자체 인증 키를 사용하므로 유효성 검사를 건너뜁니다.
+        // 'openai-glass' uses its own authentication key, so skip validation.
         if (provider !== 'openai-glass') {
             const validationResult = await this.validateApiKey(provider, key);
             if (!validationResult.success) {
@@ -293,7 +311,7 @@ class ModelStateService extends EventEmitter {
         const existingSettings = await providerSettingsRepository.getByProvider(provider) || {};
         await providerSettingsRepository.upsert(provider, { ...existingSettings, api_key: finalKey });
         
-        // 키가 추가/변경되었으므로, 해당 provider의 모델을 자동 선택할 수 있는지 확인
+        // Only auto-select LLM models when keys are added/changed - STT models remain constant
         await this._autoSelectAvailableModels([]);
         
         this.emit('state-updated', await this.getLiveState());
@@ -316,7 +334,8 @@ class ModelStateService extends EventEmitter {
         const setting = await providerSettingsRepository.getByProvider(provider);
         if (setting && setting.api_key) {
             await providerSettingsRepository.upsert(provider, { ...setting, api_key: null });
-            await this._autoSelectAvailableModels(['llm', 'stt']);
+            // Only auto-select LLM models when API keys are removed - STT models remain constant
+            await this._autoSelectAvailableModels(['llm']);
             this.emit('state-updated', await this.getLiveState());
             this.emit('settings-updated');
             return true;
@@ -325,14 +344,14 @@ class ModelStateService extends EventEmitter {
     }
 
     /**
-     * 사용자가 Firebase에 로그인했는지 확인합니다.
+     * Check if user is logged in to Firebase.
      */
     isLoggedInWithFirebase() {
         return this.authService.getCurrentUser().isLoggedIn;
     }
 
     /**
-     * 유효한 API 키가 하나라도 설정되어 있는지 확인합니다.
+     * Check if at least one valid API key is configured.
      */
     async hasValidApiKey() {
         if (this.isLoggedInWithFirebase()) return true;
@@ -437,7 +456,7 @@ class ModelStateService extends EventEmitter {
         };
     }
 
-    // --- 핸들러 및 유틸리티 메서드 ---
+    // --- Handler and Utility Methods ---
 
     async validateApiKey(provider, key) {
         if (!key || (key.trim() === '' && provider !== 'ollama' && provider !== 'whisper')) {
@@ -491,13 +510,13 @@ class ModelStateService extends EventEmitter {
         // LLM
         const hasLlmKey = Object.entries(apiKeyMap).some(([provider, key]) => {
             if (!key) return false;
-            if (provider === 'whisper') return false; // whisper는 LLM 없음
+            if (provider === 'whisper') return false; // whisper has no LLM
             return PROVIDERS[provider]?.llmModels?.length > 0;
         });
         // STT
         const hasSttKey = Object.entries(apiKeyMap).some(([provider, key]) => {
             if (!key) return false;
-            if (provider === 'ollama') return false; // ollama는 STT 없음
+            if (provider === 'ollama') return false; // ollama has no STT
             return PROVIDERS[provider]?.sttModels?.length > 0 || provider === 'whisper';
         });
         return hasLlmKey && hasSttKey;

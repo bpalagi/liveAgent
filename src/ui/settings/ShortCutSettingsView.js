@@ -77,7 +77,7 @@ export class ShortcutSettingsView extends LitElement {
           will-change: auto !important;
         }
         :host-context(body.has-glass) * {
-          background: transparent !important;   /* 요청한 투명 처리 */
+          background: transparent !important;   /* Requested transparency */
           filter: none !important;
           backdrop-filter: none !important;
           box-shadow: none !important;
@@ -124,14 +124,14 @@ export class ShortcutSettingsView extends LitElement {
     handleKeydown(e, shortcutKey){
         e.preventDefault(); e.stopPropagation();
         const result = this._parseAccelerator(e);
-        if(!result) return;          // modifier키만 누른 상태
+        if(!result) return;          // Only modifier key pressed
     
         const {accel, error} = result;
         if(error){
           this.feedback = {...this.feedback, [shortcutKey]:{type:'error',msg:error}};
           return;
         }
-        // 성공
+        // Success
         this.shortcuts = {...this.shortcuts, [shortcutKey]:accel};
         this.feedback = {...this.feedback, [shortcutKey]:{type:'success',msg:'Shortcut set'}};
         this.stopCapture();
@@ -161,7 +161,7 @@ export class ShortcutSettingsView extends LitElement {
     startCapture(key){ this.capturingKey = key; this.feedback = {...this.feedback, [key]:undefined}; }
 
     disableShortcut(key){
-        this.shortcuts = {...this.shortcuts, [key]:''};         // 공백 => 작동 X
+        this.shortcuts = {...this.shortcuts, [key]:''};         // Empty => disabled
         this.feedback   = {...this.feedback, [key]:{type:'success',msg:'Shortcut disabled'}};
       }
 

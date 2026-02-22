@@ -180,10 +180,10 @@ async function checkAndRunMigration(firebaseUser) {
 
         // --- 4. Mark migration as complete ---
         sqliteUserRepo.setMigrationComplete(firebaseUser.uid);
-        console.log(`[Migration] ✅ Successfully marked migration as complete for ${firebaseUser.uid}.`);
+        console.log(`[Migration] Successfully marked migration as complete for ${firebaseUser.uid}.`);
 
     } catch (error) {
-        console.error(`[Migration] 🔥 An error occurred during migration for user ${firebaseUser.uid}:`, error);
+        console.error(`[Migration] An error occurred during migration for user ${firebaseUser.uid}:`, error);
     }
 }
 

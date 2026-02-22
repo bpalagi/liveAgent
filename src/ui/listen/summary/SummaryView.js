@@ -9,7 +9,7 @@ export class SummaryView extends LitElement {
 
         /* Inherit font styles from parent */
 
-        /* highlight.js 스타일 추가 */
+        /* Add highlight.js styles */
         .insights-container pre {
             background: rgba(0, 0, 0, 0.4) !important;
             border-radius: 8px !important;
@@ -166,7 +166,7 @@ export class SummaryView extends LitElement {
             transform: translateX(2px);
         }
 
-        /* 마크다운 렌더링된 콘텐츠 스타일 */
+        /* Markdown rendered content styles */
         .markdown-content {
             color: #ffffff;
             font-size: 11px;
@@ -390,7 +390,7 @@ export class SummaryView extends LitElement {
 
                         if (this.DOMPurify.removed && this.DOMPurify.removed.length > 0) {
                             console.warn('Unsafe content detected in insights, showing plain text');
-                            element.textContent = '⚠️ ' + originalText;
+                            element.textContent = 'Warning: ' + originalText;
                             return;
                         }
                     }
@@ -405,19 +405,19 @@ export class SummaryView extends LitElement {
     }
 
     async handleRequestClick(requestText) {
-        console.log('🔥 Analysis request clicked:', requestText);
+        console.log('Analysis request clicked:', requestText);
 
         if (window.api) {
             try {
                 const result = await window.api.summaryView.sendQuestionFromSummary(requestText);
 
                 if (result.success) {
-                    console.log('✅ Question sent to AskView successfully');
+                    console.log('Question sent to AskView successfully');
                 } else {
-                    console.error('❌ Failed to send question to AskView:', result.error);
+                    console.error('Failed to send question to AskView:', result.error);
                 }
             } catch (error) {
-                console.error('❌ Error in handleRequestClick:', error);
+                console.error('Error in handleRequestClick:', error);
             }
         }
     }

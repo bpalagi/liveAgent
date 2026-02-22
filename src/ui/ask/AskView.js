@@ -750,7 +750,7 @@ export class AskView extends LitElement {
     connectedCallback() {
         super.connectedCallback();
 
-        console.log('📱 AskView connectedCallback - IPC 이벤트 리스너 설정');
+        console.log('📱 AskView connectedCallback - Setting up IPC event listeners');
 
         document.addEventListener('keydown', this.handleEscKey);
 
@@ -803,7 +803,7 @@ export class AskView extends LitElement {
                   }
                 }
               });
-            console.log('AskView: IPC 이벤트 리스너 등록 완료');
+            console.log('AskView: IPC event listeners registered');
         }
     }
 
@@ -811,7 +811,7 @@ export class AskView extends LitElement {
         super.disconnectedCallback();
         this.resizeObserver?.disconnect();
 
-        console.log('📱 AskView disconnectedCallback - IPC 이벤트 리스너 제거');
+        console.log('📱 AskView disconnectedCallback - Removing IPC event listeners');
 
         document.removeEventListener('keydown', this.handleEscKey);
 
@@ -834,7 +834,7 @@ export class AskView extends LitElement {
             window.api.askView.removeOnShowTextInput(this.handleShowTextInput);
             window.api.askView.removeOnScrollResponseUp(this.handleScroll);
             window.api.askView.removeOnScrollResponseDown(this.handleScroll);
-            console.log('✅ AskView: IPC 이벤트 리스너 제거 필요');
+            console.log('✅ AskView: IPC event listeners need to be removed');
         }
     }
 
@@ -980,7 +980,7 @@ export class AskView extends LitElement {
     handleScroll(direction) {
         const scrollableElement = this.shadowRoot.querySelector('#responseContainer');
         if (scrollableElement) {
-            const scrollAmount = 100; // 한 번에 스크롤할 양 (px)
+            const scrollAmount = 100; // Amount to scroll at once (px)
             if (direction === 'up') {
                 scrollableElement.scrollTop -= scrollAmount;
             } else {
@@ -1028,18 +1028,18 @@ export class AskView extends LitElement {
 
     renderStreamingMarkdown(responseContainer) {
         try {
-            // 파서가 없거나 컨테이너가 변경되었으면 새로 생성
+            // Create new if parser doesn't exist or container has changed
             if (!this.smdParser || this.smdContainer !== responseContainer) {
                 this.smdContainer = responseContainer;
                 this.smdContainer.innerHTML = '';
                 
-                // smd.js의 default_renderer 사용
+                // Use default_renderer from smd.js
                 const renderer = default_renderer(this.smdContainer);
                 this.smdParser = parser(renderer);
                 this.lastProcessedLength = 0;
             }
 
-            // 새로운 텍스트만 처리 (스트리밍 최적화)
+            // Process only new text (streaming optimization)
             const currentText = this.currentResponse;
             const newText = currentText.slice(this.lastProcessedLength);
             

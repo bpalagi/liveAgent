@@ -181,8 +181,27 @@ app.whenReady().then(async () => {
         //////// after_modelStateService ////////
         await modelStateService.initialize();
         //////// after_modelStateService ////////
+        
+        // Pre-start WhisperLive server with medium model for faster initialization
+        const whisperService = require('./features/common/services/whisperService');
+        try {
+            const sttModelInfo = await modelStateService.getCurrentModelInfo('stt');
+            if (sttModelInfo && sttModelInfo.provider === 'whisper') {
+                console.log('[Main] Pre-starting WhisperLive server...');
+                // Initialize whisper service if needed
+                if (!whisperService.isInitialized) {
+                    await whisperService.initialize();
+                }
+                // Start the server in background (non-blocking)
+                whisperService.startLiveServer('medium.en').catch(err => {
+                    console.log('[Main] WhisperLive pre-start failed:', err.message);
+                });
+            }
+        } catch (error) {
+            console.log('[Main] Could not pre-start WhisperLive:', error.message);
+        }
 
-        featureBridge.initialize();  // 추가: featureBridge 초기화
+        featureBridge.initialize();  // Added: featureBridge initialization
         windowBridge.initialize();
         setupWebDataHandlers();
 
@@ -596,14 +615,14 @@ async function startWebStack() {
     timestamp: Date.now()
   };
   
-  // 쓰기 가능한 임시 폴더에 런타임 설정 파일 생성
+  // Create runtime config file in writable temporary folder
   const tempDir = app.getPath('temp');
   const configPath = path.join(tempDir, 'runtime-config.json');
   fs.writeFileSync(configPath, JSON.stringify(runtimeConfig, null, 2));
 
   const frontSrv = express();
   
-  // 프론트엔드에서 /runtime-config.json을 요청하면 임시 폴더의 파일을 제공
+  // Serve file from temporary folder when frontend requests /runtime-config.json
   frontSrv.get('/runtime-config.json', (req, res) => {
     res.sendFile(configPath);
   });

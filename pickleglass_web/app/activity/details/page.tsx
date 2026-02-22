@@ -12,6 +12,7 @@ import {
   getSessionDetails,
   deleteSession,
 } from '@/utils/api'
+import { exportAndDownloadSession } from '@/utils/exportUtils'
 
 type ConversationItem = (Transcript & { type: 'transcript' }) | (AiMessage & { type: 'ai_message' });
 
@@ -32,6 +33,7 @@ function SessionDetailsContent() {
   const sessionId = searchParams.get('sessionId');
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (userInfo && sessionId) {
@@ -61,6 +63,19 @@ function SessionDetailsContent() {
       alert('Failed to delete activity.');
       setDeleting(false);
       console.error(error);
+    }
+  };
+
+  const handleExport = async () => {
+    if (!sessionDetails) return;
+    setExporting(true);
+    try {
+      exportAndDownloadSession(sessionDetails);
+    } catch (error) {
+      alert('Failed to export session.');
+      console.error(error);
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -117,13 +132,22 @@ function SessionDetailsContent() {
                             </span>
                         </div>
                     </div>
-                    <button
-                        onClick={handleDelete}
-                        disabled={deleting}
-                        className={`px-4 py-2 rounded text-sm font-medium border border-red-200 text-red-700 bg-red-50 hover:bg-red-100 transition-colors ${deleting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                        {deleting ? 'Deleting...' : 'Delete Activity'}
-                    </button>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleExport}
+                            disabled={exporting}
+                            className={`px-4 py-2 rounded text-sm font-medium border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors ${exporting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                            {exporting ? 'Exporting...' : 'Export Markdown'}
+                        </button>
+                        <button
+                            onClick={handleDelete}
+                            disabled={deleting}
+                            className={`px-4 py-2 rounded text-sm font-medium border border-red-200 text-red-700 bg-red-50 hover:bg-red-100 transition-colors ${deleting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                            {deleting ? 'Deleting...' : 'Delete Activity'}
+                        </button>
+                    </div>
                 </div>
 
                 {sessionDetails.summary && (

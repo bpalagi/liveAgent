@@ -31,7 +31,7 @@ class ListenService {
         // Summary service callbacks
         this.summaryService.setCallbacks({
             onAnalysisComplete: (data) => {
-                console.log('📊 Analysis completed:', data);
+                console.log('Analysis completed:', data);
             },
             onStatusUpdate: (status) => {
                 this.sendToRenderer('update-status', status);
@@ -51,26 +51,24 @@ class ListenService {
     initialize() {
         this.setupIpcHandlers();
         
-        // Listen for model state changes to reinitialize STT if needed
-        const modelStateService = require('../common/services/modelStateService');
-        modelStateService.on('settings-updated', async () => {
-            if (this.currentSessionId) {
-                console.log('[ListenService] Model settings changed, checking if STT reinitialization is needed...');
-                const currentModel = await modelStateService.getCurrentModelInfo('stt');
-                if (currentModel && currentModel.provider !== this.sttService.modelInfo?.provider) {
-                    console.log('[ListenService] STT provider changed, reinitializing sessions...');
-                    try {
-                        await this.sttService.initializeSttSessions();
-                        this.sendToRenderer('update-status', 'Connected. Ready to listen.');
-                    } catch (err) {
-                        console.error('[ListenService] Failed to reinitialize STT after model change:', err);
-                        this.sendToRenderer('update-status', 'STT reinitialization failed.');
-                    }
-                }
-            }
-        });
+        // Check if STT model is configured at startup
+        this.checkSttModelReadiness();
         
         console.log('[ListenService] Initialized and ready.');
+    }
+
+    async checkSttModelReadiness() {
+        try {
+            const modelStateService = require('../common/services/modelStateService');
+            const sttModelInfo = await modelStateService.getCurrentModelInfo('stt');
+            if (!sttModelInfo || !sttModelInfo.apiKey) {
+                console.warn('[ListenService] STT model is not configured. Please configure an STT provider in settings.');
+            } else {
+                console.log(`[ListenService] STT model ready: ${sttModelInfo.model} (provider: ${sttModelInfo.provider})`);
+            }
+        } catch (error) {
+            console.error('[ListenService] Error checking STT model readiness:', error);
+        }
     }
 
     async handleListenRequest(listenButtonText) {
@@ -185,6 +183,14 @@ class ListenService {
         this.sendToRenderer('update-status', 'Initializing sessions...');
 
         try {
+            // First, ensure STT model is configured and ready
+            const modelStateService = require('../common/services/modelStateService');
+            const sttModelInfo = await modelStateService.getCurrentModelInfo('stt');
+            if (!sttModelInfo || !sttModelInfo.apiKey) {
+                throw new Error('STT model is not configured. Please configure an STT provider in settings.');
+            }
+            console.log(`[ListenService] Using STT model: ${sttModelInfo.model} (provider: ${sttModelInfo.provider})`);
+
             // Initialize database session
             const sessionInitialized = await this.initializeNewSession();
             if (!sessionInitialized) {
@@ -213,13 +219,13 @@ class ListenService {
             if (!sttReady) throw new Error('STT init failed after retries');
             /* ------------------------------------------- */
 
-            console.log('✅ Listen service initialized successfully.');
+            console.log('Listen service initialized successfully.');
             
             this.sendToRenderer('update-status', 'Connected. Ready to listen.');
             
             return true;
         } catch (error) {
-            console.error('❌ Failed to initialize listen service:', error);
+            console.error('Failed to initialize listen service:', error);
             this.sendToRenderer('update-status', 'Initialization failed.');
             return false;
         } finally {
@@ -292,9 +298,9 @@ class ListenService {
             try {
                 const result = await asyncFn.apply(this, args);
                 if (successMessage) console.log(successMessage);
-                // `startMacOSAudioCapture`는 성공 시 { success, error } 객체를 반환하지 않으므로,
-                // 핸들러가 일관된 응답을 보내도록 여기서 success 객체를 반환합니다.
-                // 다른 함수들은 이미 success 객체를 반환합니다.
+                // `startMacOSAudioCapture` doesn't return { success, error } object on success,
+                // so return success object here for consistent response from handler.
+                // Other functions already return success object.
                 return result && typeof result.success !== 'undefined' ? result : { success: true };
             } catch (e) {
                 console.error(errorMessage, e);
@@ -303,7 +309,7 @@ class ListenService {
         };
     }
 
-    // `_createHandler`를 사용하여 핸들러들을 동적으로 생성합니다.
+    // Dynamically create handlers using `_createHandler`
     handleSendMicAudioContent = this._createHandler(
         this.sendMicAudioContent,
         null,

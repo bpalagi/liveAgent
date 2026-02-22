@@ -19,7 +19,7 @@ const INPUT_SAMPLE_RATE = 24000;
 const TARGET_SAMPLE_RATE = 16000;
 
 // Client-side VAD: RMS energy threshold for silence detection
-const VAD_ENERGY_THRESHOLD = 0.003;
+const VAD_ENERGY_THRESHOLD = 0.001;  // Lowered from 0.003 to be more sensitive
 // Allow this many consecutive silence chunks through so server VAD detects end-of-speech
 const VAD_SILENCE_GRACE_CHUNKS = 8;
 
@@ -96,6 +96,8 @@ class WhisperSTTSession extends EventEmitter {
                 // Map the model name to the correct faster-whisper format
                 const serverModel = this._mapModelName(this.model);
                 await this.whisperService.startLiveServer(serverModel);
+                // Wait for server to be fully ready
+                await this.whisperService.waitForServerReady();
             }
 
             const port = this.whisperService.getLiveServerPort();
@@ -121,13 +123,13 @@ class WhisperSTTSession extends EventEmitter {
                         // and suppresses common hallucination patterns
                         initial_prompt: 'This is a conversation in English.',
                         // Server-side tuning for speed + quality
-                        no_speech_thresh: 0.3,          // Lower = fewer false silence drops
-                        same_output_threshold: 1,        // Finalize repeated segments even faster
-                        send_last_n_segments: 5,         // Less data per WS message
-                        // VAD parameters for shorter segments
+                        no_speech_thresh: 0.1,          // Much lower to catch more speech
+                        same_output_threshold: 0.8,      // Lower to finalize segments faster
+                        send_last_n_segments: 3,         // Send fewer segments for faster updates
+                        // VAD parameters for shorter segments - more aggressive for system audio
                         vad_parameters: {
-                            onset: 0.5,                 // Speech onset threshold (lower = more sensitive)
-                            offset: 0.3,                // Speech offset threshold (lower = faster cut)
+                            onset: 0.1,                 // Much lower = more sensitive to speech onset
+                            offset: 0.1,                // Much lower = faster cut after speech
                             // min_duration_on: 0.2,    // Removed - not supported by current VAD library
                             // min_duration_off: 0.3,   // Removed - not supported by current VAD library
                         },
@@ -184,15 +186,8 @@ class WhisperSTTSession extends EventEmitter {
     }
 
     _mapModelName(model) {
-        // Map Glass model IDs to faster-whisper English-only model names.
-        // The .en variants are smaller, faster, and higher quality for English.
-        const map = {
-            'whisper-tiny': 'tiny.en',
-            'whisper-base': 'base.en',
-            'whisper-small': 'small.en',
-            'whisper-medium': 'medium.en',
-        };
-        return map[model] || 'small.en';
+        // Hardcode to medium.en for all models as requested
+        return 'medium.en';
     }
 
     _getSegmentKey(seg) {
@@ -423,7 +418,7 @@ class WhisperProvider {
     async createSTT(config) {
         await this.initialize();
         
-        const model = config.model || 'whisper-tiny';
+        const model = config.model || 'whisper-medium';
         const sessionType = config.sessionType || 'unknown';
         console.log(`[WhisperProvider] Creating ${sessionType} STT session with model: ${model}`);
         

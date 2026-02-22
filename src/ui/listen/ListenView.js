@@ -40,7 +40,7 @@ export class ListenView extends LitElement {
     cursor: text !important;
 }
 
-/* highlight.js 스타일 추가 */
+/* Add highlight.js styles */
 .insights-container pre {
     background: rgba(0, 0, 0, 0.4) !important;
     border-radius: 8px !important;

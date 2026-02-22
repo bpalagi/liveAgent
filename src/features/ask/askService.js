@@ -237,7 +237,7 @@ class AskService {
         let sessionId;
 
         try {
-            console.log(`[AskService] 🤖 Processing message: ${userPrompt.substring(0, 50)}...`);
+            console.log(`[AskService] Processing message: ${userPrompt.substring(0, 50)}...`);
 
             sessionId = await sessionRepository.getOrCreateActive('ask');
             await askRepository.addAiMessage({ sessionId, role: 'user', content: userPrompt.trim() });
@@ -295,18 +295,18 @@ class AskService {
                 const reader = response.body.getReader();
                 signal.addEventListener('abort', () => {
                     console.log(`[AskService] Aborting stream reader. Reason: ${signal.reason}`);
-                    reader.cancel(signal.reason).catch(() => { /* 이미 취소된 경우의 오류는 무시 */ });
+                    reader.cancel(signal.reason).catch(() => { /* Ignore errors if already cancelled */ });
                 });
 
                 await this._processStream(reader, askWin, sessionId, signal);
                 return { success: true };
 
             } catch (multimodalError) {
-                // 멀티모달 요청이 실패했고 스크린샷이 포함되어 있다면 텍스트만으로 재시도
+                // If multimodal request failed and screenshot is included, retry with text only
                 if (screenshotBase64 && this._isMultimodalError(multimodalError)) {
                     console.log(`[AskService] Multimodal request failed, retrying with text-only: ${multimodalError.message}`);
                     
-                    // 텍스트만으로 메시지 재구성
+                    // Reconstruct message with text only
                     const textOnlyMessages = [
                         { role: 'system', content: systemPrompt },
                         {
@@ -333,7 +333,7 @@ class AskService {
                     await this._processStream(fallbackReader, askWin, sessionId, signal);
                     return { success: true };
                 } else {
-                    // 다른 종류의 에러이거나 스크린샷이 없었다면 그대로 throw
+                    // If it's a different type of error or no screenshot, throw as is
                     throw multimodalError;
                 }
             }
@@ -426,7 +426,7 @@ class AskService {
     }
 
     /**
-     * 멀티모달 관련 에러인지 판단
+     * Determine if it's a multimodal related error
      * @private
      */
     _isMultimodalError(error) {
