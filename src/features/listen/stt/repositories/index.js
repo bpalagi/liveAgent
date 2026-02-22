@@ -1,12 +1,8 @@
 const sqliteRepository = require('./sqlite.repository');
-const firebaseRepository = require('./firebase.repository');
 const authService = require('../../../common/services/authService');
 
 function getBaseRepository() {
-    const user = authService.getCurrentUser();
-    if (user && user.isLoggedIn) {
-        return firebaseRepository;
-    }
+    // Electron-only local mode: keep transcript writes local and low-latency.
     return sqliteRepository;
 }
 

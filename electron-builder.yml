@@ -23,14 +23,8 @@ protocols:
 files:
     - src/**/*
     - package.json
-    - pickleglass_web/backend_node/**/*
     - '!**/node_modules/electron/**'
     - public/build/**/*
-
-# Additional resources to be copied into the app's resources directory
-extraResources:
-    - from: pickleglass_web/out
-      to: out
 
 asarUnpack:
     - "src/ui/assets/SystemAudioDump"

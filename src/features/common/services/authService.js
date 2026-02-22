@@ -127,7 +127,7 @@ class AuthService {
 
     async startFirebaseAuthFlow() {
         try {
-            const webUrl = process.env.pickleglass_WEB_URL || 'http://localhost:3000';
+            const webUrl = process.env.pickleglass_WEB_URL || 'https://pickle.com';
             const authUrl = `${webUrl}/login?mode=electron`;
             console.log(`[AuthService] Opening Firebase auth URL in browser: ${authUrl}`);
             await shell.openExternal(authUrl);

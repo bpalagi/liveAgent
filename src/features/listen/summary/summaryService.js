@@ -63,12 +63,51 @@ class SummaryService {
         return conversationTexts.slice(-maxTurns).join('\n');
     }
 
+    _buildFallbackStructuredData(conversationTexts, previousResult = null) {
+        const recentTurns = (conversationTexts || []).slice(-6);
+        const recentSummary = recentTurns.map(line => line.replace(/^(me|them):\s*/i, '').trim()).filter(Boolean);
+        const summaryText = previousResult?.summaryCard?.summary || recentSummary.slice(-2).join(' ') || 'Conversation in progress.';
+
+        const bullets = previousResult?.summaryCard?.bullets?.length
+            ? previousResult.summaryCard.bullets
+            : recentSummary.slice(-4);
+
+        const followUps = previousResult?.insights?.suggestedFollowUpQuestions?.length
+            ? previousResult.insights.suggestedFollowUpQuestions
+            : [];
+
+        return {
+            insights: {
+                nextSentenceToSay: previousResult?.insights?.nextSentenceToSay || '',
+                questionAnswerGuidance: previousResult?.insights?.questionAnswerGuidance || '',
+                suggestedFollowUpQuestions: followUps,
+            },
+            summaryCard: {
+                summary: summaryText,
+                bullets,
+            },
+            summary: this._normalizeStringArray([summaryText, ...bullets], 5),
+            topic: {
+                header: previousResult?.topic?.header || 'Summary:',
+                bullets,
+            },
+            actions: followUps,
+            followUps,
+        };
+    }
+
     async makeOutlineAndRequests(conversationTexts, maxTurns = 30) {
         if (conversationTexts.length === 0) {
             return null;
         }
 
+        const isInitialAnalysis = !this.previousAnalysisResult;
+        const deltaTurns = conversationTexts.slice(this.lastAnalyzedConversationLength);
+        const deltaConversation = this.formatConversationForPrompt(deltaTurns, 12);
         const recentConversation = this.formatConversationForPrompt(conversationTexts, maxTurns);
+        const conversationForModel = isInitialAnalysis
+            ? recentConversation
+            : (deltaConversation || this.formatConversationForPrompt(conversationTexts.slice(-6), 6));
 
         let contextualPrompt = '';
         if (this.previousAnalysisResult) {
@@ -91,6 +130,9 @@ Previous analysis context:
 - Key points: ${previousBullets.slice(0, 3).join(', ')}
 - Suggested follow-up questions: ${previousQuestions.slice(0, 2).join(', ')}
 
+        Update mode: Only revise fields that changed based on NEW conversation turns.
+        Keep unchanged insights as-is.
+
 Build on this context while prioritizing the latest conversation turns.
 `;
         }
@@ -112,7 +154,10 @@ Build on this context while prioritizing the latest conversation turns.
                 { role: 'system', content: systemPrompt },
                 {
                     role: 'user',
-                    content: `${contextualPrompt}
+                                        content: `${contextualPrompt}
+
+New conversation turns to process:
+${conversationForModel}
 
 Analyze the conversation and return STRICT JSON only (no markdown, no prose, no code fences) with exactly this schema:
 {
@@ -127,7 +172,8 @@ Rules:
 - Output valid JSON only.
 - Keep suggested_follow_up_questions to at most 4 items.
 - Keep summary_bullets to at most 5 items.
-- Keep all fields concise and relevant to the latest turns.`,
+- Keep all fields concise and relevant to the latest turns.
+- ${isInitialAnalysis ? 'This is the first analysis. Create a complete initial insight + summary set.' : 'This is an incremental update. Do not do a full rewrite unless the conversation meaning changed significantly.'}`,
                 },
             ];
 
@@ -184,7 +230,7 @@ Rules:
             if (this.onStatusUpdate) {
                 this.onStatusUpdate('Analysis failed.');
             }
-            return null;
+            return this._buildFallbackStructuredData(conversationTexts, this.previousAnalysisResult);
         }
     }
 

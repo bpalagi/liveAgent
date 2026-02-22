@@ -62,8 +62,6 @@ module.exports = {
        
     // General
     ipcMain.handle('get-preset-templates', () => presetRepository.getPresetTemplates());
-    ipcMain.handle('get-web-url', () => process.env.pickleglass_WEB_URL || 'http://localhost:3000');
-
     // Ollama
     ipcMain.handle('ollama:get-status', async () => await ollamaService.handleGetStatus());
     ipcMain.handle('ollama:install', async () => await ollamaService.handleInstall());

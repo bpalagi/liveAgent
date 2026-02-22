@@ -5,7 +5,7 @@
     "description": "Cl*ely for Free",
     "main": "src/index.js",
     "scripts": {
-        "setup": "npm install && cd pickleglass_web && npm install && npm run build && cd .. && npm start",
+        "setup": "npm install && npm start",
         "start": "npm run build:renderer && electron .",
         "package": "npm run build:all && electron-builder --dir",
         "make": "npm run build:renderer && electron-forge make",
@@ -15,8 +15,7 @@
         "lint": "eslint --ext .ts,.tsx,.js .",
         "postinstall": "electron-builder install-app-deps",
         "build:renderer": "node build.js",
-        "build:web": "cd pickleglass_web && npm run build && cd ..",
-        "build:all": "npm run build:renderer && npm run build:web",
+        "build:all": "npm run build:renderer",
         "watch:renderer": "node build.js --watch"
     },
     "keywords": [

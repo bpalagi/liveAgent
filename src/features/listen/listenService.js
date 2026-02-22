@@ -1,6 +1,9 @@
-const { BrowserWindow } = require('electron');
+const { app } = require('electron');
+const fs = require('node:fs/promises');
+const path = require('node:path');
 const SttService = require('./stt/sttService');
 const SummaryService = require('./summary/summaryService');
+const summaryRepository = require('./summary/repositories');
 const authService = require('../common/services/authService');
 const sessionRepository = require('../common/repositories/session');
 const sttRepository = require('./stt/repositories');
@@ -257,6 +260,8 @@ class ListenService {
     async closeSession() {
         try {
             this.sendToRenderer('change-listen-capture-state', { status: "stop" });
+            const completedSessionId = this.currentSessionId;
+
             // Close STT sessions
             await this.sttService.closeSessions();
 
@@ -266,6 +271,17 @@ class ListenService {
             if (this.currentSessionId) {
                 await sessionRepository.end(this.currentSessionId);
                 console.log(`[DB] Session ${this.currentSessionId} ended.`);
+            }
+
+            if (completedSessionId) {
+                try {
+                    const markdownPath = await this.saveSessionAsMarkdown(completedSessionId);
+                    if (markdownPath) {
+                        console.log(`[ListenService] Session note saved: ${markdownPath}`);
+                    }
+                } catch (saveError) {
+                    console.error('[ListenService] Failed to save session note:', saveError);
+                }
             }
 
             // Reset state
@@ -278,6 +294,116 @@ class ListenService {
             console.error('Error closing listen service session:', error);
             return { success: false, error: error.message };
         }
+    }
+
+    async getNotesDirectory() {
+        const appPath = app.getAppPath();
+        const candidates = [
+            path.resolve(appPath, '..', 'notes'),
+            path.resolve(appPath, 'notes'),
+            path.resolve(process.cwd(), '..', 'notes')
+        ];
+
+        for (const candidate of candidates) {
+            try {
+                await fs.access(candidate);
+                return candidate;
+            } catch {
+                // continue
+            }
+        }
+
+        await fs.mkdir(candidates[0], { recursive: true });
+        return candidates[0];
+    }
+
+    formatDateTime(date = new Date()) {
+        const pad = (value) => value.toString().padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
+    }
+
+    safeArrayParse(value) {
+        if (!value || typeof value !== 'string') return [];
+        try {
+            const parsed = JSON.parse(value);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    }
+
+    buildSessionMarkdown({ sessionId, transcripts, analysisResult, summaryRecord }) {
+        const generatedAt = new Date();
+
+        const summaryText = analysisResult?.summaryCard?.summary || summaryRecord?.tldr || '';
+        const summaryBullets = analysisResult?.summaryCard?.bullets?.length
+            ? analysisResult.summaryCard.bullets
+            : this.safeArrayParse(summaryRecord?.bullet_json);
+        const followUps = analysisResult?.insights?.suggestedFollowUpQuestions?.length
+            ? analysisResult.insights.suggestedFollowUpQuestions
+            : this.safeArrayParse(summaryRecord?.action_json);
+        const nextSentence = analysisResult?.insights?.nextSentenceToSay || '';
+        const guidance = analysisResult?.insights?.questionAnswerGuidance || '';
+
+        const transcriptLines = (transcripts || [])
+            .map((entry) => {
+                const speaker = entry?.speaker || 'Speaker';
+                const text = (entry?.text || '').trim();
+                if (!text) return null;
+                return `- **${speaker}:** ${text}`;
+            })
+            .filter(Boolean);
+
+        const bulletLines = summaryBullets.map((item) => `- ${item}`);
+        const followUpLines = followUps.map((item) => `- ${item}`);
+
+        return [
+            '# Listen Session',
+            '',
+            `- Session ID: ${sessionId}`,
+            `- Saved At: ${generatedAt.toISOString()}`,
+            '',
+            '## Insight',
+            '',
+            summaryText ? summaryText : '_No summary generated._',
+            '',
+            '### Key Points',
+            ...(bulletLines.length ? bulletLines : ['- _No key points generated._']),
+            '',
+            '### Next Sentence To Say',
+            nextSentence ? nextSentence : '_Not available._',
+            '',
+            '### Question/Answer Guidance',
+            guidance ? guidance : '_Not available._',
+            '',
+            '### Suggested Follow-up Questions',
+            ...(followUpLines.length ? followUpLines : ['- _No follow-up suggestions generated._']),
+            '',
+            '## Transcript',
+            ...(transcriptLines.length ? transcriptLines : ['- _No transcript captured._']),
+            ''
+        ].join('\n');
+    }
+
+    async saveSessionAsMarkdown(sessionId) {
+        const [transcripts, summaryRecord] = await Promise.all([
+            sttRepository.getAllTranscriptsBySessionId(sessionId),
+            summaryRepository.getSummaryBySessionId(sessionId)
+        ]);
+
+        const analysisResult = this.summaryService.getCurrentAnalysisData()?.previousResult || null;
+        const content = this.buildSessionMarkdown({
+            sessionId,
+            transcripts,
+            analysisResult,
+            summaryRecord
+        });
+
+        const notesDirectory = await this.getNotesDirectory();
+        const filename = `listen-session-${this.formatDateTime()}-${sessionId.slice(0, 8)}.md`;
+        const filePath = path.join(notesDirectory, filename);
+        await fs.writeFile(filePath, content, 'utf-8');
+        return filePath;
     }
 
     getCurrentSessionData() {

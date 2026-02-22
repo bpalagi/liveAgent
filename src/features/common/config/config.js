@@ -10,8 +10,6 @@ class Config {
             apiUrl: process.env.pickleglass_API_URL || 'http://localhost:9001',
             apiTimeout: 10000,
             
-            webUrl: process.env.pickleglass_WEB_URL || 'http://localhost:3000',
-            
             enableJWT: false,
             fallbackToHeaderAuth: false,
             
@@ -41,11 +39,6 @@ class Config {
         if (process.env.pickleglass_API_URL) {
             this.config.apiUrl = process.env.pickleglass_API_URL;
             console.log(`[Config] API URL from env: ${this.config.apiUrl}`);
-        }
-        
-        if (process.env.pickleglass_WEB_URL) {
-            this.config.webUrl = process.env.pickleglass_WEB_URL;
-            console.log(`[Config] Web URL from env: ${this.config.webUrl}`);
         }
         
         if (process.env.pickleglass_API_TIMEOUT) {
