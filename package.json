@@ -1,6 +1,6 @@
 {
-    "name": "pickle-glass",
-    "productName": "Glass",
+    "name": "live-agent",
+    "productName": "Live Agent",
     "version": "0.2.4",
     "description": "Cl*ely for Free",
     "main": "src/index.js",
@@ -19,15 +19,15 @@
         "watch:renderer": "node build.js --watch"
     },
     "keywords": [
-        "glass",
-        "pickle glass",
+        "live agent",
+        "desktop assistant",
         "ai assistant",
         "real-time",
         "live summary",
         "contextual ai"
     ],
     "author": {
-        "name": "Pickle Team"
+        "name": "Live Agent Team"
     },
     "license": "GPL-3.0",
     "dependencies": {
@@ -37,12 +37,10 @@
         "@google/generative-ai": "^0.24.1",
         "axios": "^1.10.0",
         "better-sqlite3": "^9.6.0",
-        "cors": "^2.8.5",
         "dotenv": "^17.0.0",
         "electron-squirrel-startup": "^1.0.1",
         "electron-store": "^8.2.0",
         "electron-updater": "^6.6.2",
-        "express": "^4.18.2",
         "firebase": "^11.10.0",
         "firebase-admin": "^13.4.0",
         "jsonwebtoken": "^9.0.2",
@@ -50,10 +48,8 @@
         "node-fetch": "^2.7.0",
         "openai": "^4.70.0",
         "portkey-ai": "^1.10.1",
-        "react-hot-toast": "^2.5.2",
         "sharp": "^0.34.2",
         "validator": "^13.11.0",
-        "wait-on": "^8.0.3",
         "ws": "^8.18.0"
     },
     "devDependencies": {

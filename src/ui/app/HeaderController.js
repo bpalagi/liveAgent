@@ -91,15 +91,7 @@ class HeaderTransitionManager {
                 }
             });
             window.api.headerController.onForceShowApiKeyHeader(async () => {
-                console.log('[HeaderController] Received broadcast to show apikey header. Switching now.');
-                const isConfigured = await window.api.apiKeyHeader.areProvidersConfigured();
-                if (!isConfigured) {
-                    await this._resizeForWelcome();
-                    this.ensureHeader('welcome');
-                } else {
-                    await this._resizeForApiKey();
-                    this.ensureHeader('apikey');
-                }
+                console.log('[HeaderController] Received force-show-apikey-header broadcast (ignored - no login gate).');
             });            
         }
     }
@@ -127,20 +119,13 @@ class HeaderTransitionManager {
 
     //////// after_modelStateService ////////
     async handleStateUpdate(userState) {
-        const isConfigured = await window.api.apiKeyHeader.areProvidersConfigured();
-
-        if (isConfigured) {
-            // If providers are configured, always check permissions regardless of login state.
-            const permissionResult = await this.checkPermissions();
-            if (permissionResult.success) {
-                this.transitionToMainHeader();
-            } else {
-                this.transitionToPermissionHeader();
-            }
+        // Always proceed to main header - no login/API-key gate.
+        // Default providers (Whisper STT) are auto-provisioned at startup.
+        const permissionResult = await this.checkPermissions();
+        if (permissionResult.success) {
+            this.transitionToMainHeader();
         } else {
-            // If no providers are configured, show the welcome header to prompt for setup.
-            await this._resizeForWelcome();
-            this.ensureHeader('welcome');
+            this.transitionToPermissionHeader();
         }
     }
 

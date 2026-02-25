@@ -18,9 +18,65 @@ class ModelStateService extends EventEmitter {
         console.log('[ModelStateService] Initializing one-time setup...');
         await this._initializeEncryption();
         await this._runMigrations();
+        await this._ensureDefaultProviders();
         this.setupLocalAIStateSync();
         await this._autoSelectAvailableModels([], true);
         console.log('[ModelStateService] One-time setup complete.');
+    }
+
+    /**
+     * Ensure default providers are always available so the app can start
+     * without requiring the user to go through the API-key / login flow.
+     * Whisper (local STT) is provisioned automatically.
+     * Environment-variable API keys are auto-provisioned for LLM + STT.
+     */
+    async _ensureDefaultProviders() {
+        // --- Auto-provision API keys from environment variables ---
+        const ENV_KEY_MAP = {
+            gemini:    ['GEMINI_API_KEY'],
+            openai:    ['OPENAI_API_KEY'],
+            anthropic: ['ANTHROPIC_API_KEY'],
+            deepgram:  ['DEEPGRAM_API_KEY'],
+            zen:       ['ZEN_API_KEY', 'OPENCODE_API_KEY'],
+        };
+
+        for (const [provider, envNames] of Object.entries(ENV_KEY_MAP)) {
+            const existing = await providerSettingsRepository.getByProvider(provider);
+            if (existing && existing.api_key) continue;           // already configured
+
+            const envKey = envNames.map(n => process.env[n]).find(v => v && v.trim());
+            if (envKey) {
+                console.log(`[ModelStateService] Auto-provisioning ${provider} from env var`);
+                await providerSettingsRepository.upsert(provider, {
+                    ...(existing || {}),
+                    api_key: envKey.trim(),
+                });
+            }
+        }
+
+        // --- Provision Whisper as default STT — it runs locally, no API key needed ---
+        const whisperSettings = await providerSettingsRepository.getByProvider('whisper');
+        if (!whisperSettings || !whisperSettings.api_key) {
+            console.log('[ModelStateService] Provisioning Whisper as default STT provider...');
+            await providerSettingsRepository.upsert('whisper', { api_key: 'local' });
+        }
+
+        // If no STT model is currently active, select whisper-medium.
+        const activeStt = await providerSettingsRepository.getActiveProvider('stt');
+        if (!activeStt) {
+            console.log('[ModelStateService] Auto-selecting whisper-medium as default STT model...');
+            await this.setSelectedModel('stt', 'whisper-medium');
+        }
+
+        // If no LLM model is currently active, auto-select the first available.
+        const activeLlm = await providerSettingsRepository.getActiveProvider('llm');
+        if (!activeLlm) {
+            const available = await this.getAvailableModels('llm');
+            if (available.length > 0) {
+                console.log(`[ModelStateService] Auto-selecting LLM model: ${available[0].id}`);
+                await this.setSelectedModel('llm', available[0].id);
+            }
+        }
     }
 
     async _initializeEncryption() {
@@ -503,23 +559,9 @@ class ModelStateService extends EventEmitter {
     }
 
     async areProvidersConfigured() {
-        if (this.isLoggedInWithFirebase()) return true;
-        const allSettings = await providerSettingsRepository.getAll();
-        const apiKeyMap = {};
-        allSettings.forEach(s => apiKeyMap[s.provider] = s.api_key);
-        // LLM
-        const hasLlmKey = Object.entries(apiKeyMap).some(([provider, key]) => {
-            if (!key) return false;
-            if (provider === 'whisper') return false; // whisper has no LLM
-            return PROVIDERS[provider]?.llmModels?.length > 0;
-        });
-        // STT
-        const hasSttKey = Object.entries(apiKeyMap).some(([provider, key]) => {
-            if (!key) return false;
-            if (provider === 'ollama') return false; // ollama has no STT
-            return PROVIDERS[provider]?.sttModels?.length > 0 || provider === 'whisper';
-        });
-        return hasLlmKey && hasSttKey;
+        // Always return true — the login / API-key gate has been removed.
+        // Default providers (Whisper STT) are auto-provisioned at startup.
+        return true;
     }
 }
 

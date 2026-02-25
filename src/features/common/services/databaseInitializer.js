@@ -10,14 +10,18 @@ class DatabaseInitializer {
         
         // Final DB path to be used (writable location)
         const userDataPath = app.getPath('userData');
-        // In both development and production mode, the database is stored in the userData directory:
-        //   macOS: ~/Library/Application Support/Glass/pickleglass.db
-        //   Windows: %APPDATA%\Glass\pickleglass.db
-        this.dbPath = path.join(userDataPath, 'pickleglass.db');
+        // In both development and production mode, the database is stored in the userData directory.
+        this.dbPath = path.join(userDataPath, 'liveagent.db');
+        this.legacyDbPath = path.join(userDataPath, 'pickleglass.db');
         this.dataDir = userDataPath;
 
         // The original DB path (read-only location in the package)
         this.sourceDbPath = app.isPackaged
+            ? path.join(process.resourcesPath, 'data', 'liveagent.db')
+            : path.join(app.getAppPath(), 'data', 'liveagent.db');
+
+        // Legacy bundled DB path for backward compatibility.
+        this.legacySourceDbPath = app.isPackaged
             ? path.join(process.resourcesPath, 'data', 'pickleglass.db')
             : path.join(app.getAppPath(), 'data', 'pickleglass.db');
     }
@@ -31,6 +35,17 @@ class DatabaseInitializer {
                 fs.mkdirSync(this.dataDir, { recursive: true });
             }
 
+            // Prefer migrating from local legacy DB if present.
+            if (fs.existsSync(this.legacyDbPath)) {
+                try {
+                    fs.copyFileSync(this.legacyDbPath, this.dbPath);
+                    console.log(`[DB] Legacy database migrated to ${this.dbPath}`);
+                    return;
+                } catch (error) {
+                    console.error(`[DB] Failed to migrate legacy database:`, error);
+                }
+            }
+
             // If there's an initial DB bundled in the package, copy it; otherwise, leave it to create an empty file.
             if (fs.existsSync(this.sourceDbPath)) {
                 try {
@@ -39,6 +54,13 @@ class DatabaseInitializer {
                 } catch (error) {
                     console.error(`[DB] Failed to copy bundled database:`, error);
                     // Continue to create new DB even if copy fails
+                }
+            } else if (fs.existsSync(this.legacySourceDbPath)) {
+                try {
+                    fs.copyFileSync(this.legacySourceDbPath, this.dbPath);
+                    console.log(`[DB] Legacy bundled database copied to ${this.dbPath}`);
+                } catch (error) {
+                    console.error(`[DB] Failed to copy legacy bundled database:`, error);
                 }
             } else {
                 console.log('[DB] No bundled DB found – a fresh database will be created.');

@@ -7,7 +7,7 @@ class Config {
     constructor() {
         this.env = process.env.NODE_ENV || 'development';
         this.defaults = {
-            apiUrl: process.env.pickleglass_API_URL || 'http://localhost:9001',
+            apiUrl: process.env.LIVE_AGENT_API_URL || process.env.pickleglass_API_URL || 'http://localhost:9001',
             apiTimeout: 10000,
             
             enableJWT: false,
@@ -36,29 +36,29 @@ class Config {
     }
     
     loadEnvironmentConfig() {
-        if (process.env.pickleglass_API_URL) {
-            this.config.apiUrl = process.env.pickleglass_API_URL;
+        if (process.env.LIVE_AGENT_API_URL || process.env.pickleglass_API_URL) {
+            this.config.apiUrl = process.env.LIVE_AGENT_API_URL || process.env.pickleglass_API_URL;
             console.log(`[Config] API URL from env: ${this.config.apiUrl}`);
         }
         
-        if (process.env.pickleglass_API_TIMEOUT) {
-            this.config.apiTimeout = parseInt(process.env.pickleglass_API_TIMEOUT);
+        if (process.env.LIVE_AGENT_API_TIMEOUT || process.env.pickleglass_API_TIMEOUT) {
+            this.config.apiTimeout = parseInt(process.env.LIVE_AGENT_API_TIMEOUT || process.env.pickleglass_API_TIMEOUT);
         }
         
-        if (process.env.pickleglass_ENABLE_JWT) {
-            this.config.enableJWT = process.env.pickleglass_ENABLE_JWT === 'true';
+        if (process.env.LIVE_AGENT_ENABLE_JWT || process.env.pickleglass_ENABLE_JWT) {
+            this.config.enableJWT = (process.env.LIVE_AGENT_ENABLE_JWT || process.env.pickleglass_ENABLE_JWT) === 'true';
         }
         
-        if (process.env.pickleglass_CACHE_TIMEOUT) {
-            this.config.cacheTimeout = parseInt(process.env.pickleglass_CACHE_TIMEOUT);
+        if (process.env.LIVE_AGENT_CACHE_TIMEOUT || process.env.pickleglass_CACHE_TIMEOUT) {
+            this.config.cacheTimeout = parseInt(process.env.LIVE_AGENT_CACHE_TIMEOUT || process.env.pickleglass_CACHE_TIMEOUT);
         }
         
-        if (process.env.pickleglass_LOG_LEVEL) {
-            this.config.logLevel = process.env.pickleglass_LOG_LEVEL;
+        if (process.env.LIVE_AGENT_LOG_LEVEL || process.env.pickleglass_LOG_LEVEL) {
+            this.config.logLevel = process.env.LIVE_AGENT_LOG_LEVEL || process.env.pickleglass_LOG_LEVEL;
         }
         
-        if (process.env.pickleglass_DEBUG) {
-            this.config.enableDebugLogging = process.env.pickleglass_DEBUG === 'true';
+        if (process.env.LIVE_AGENT_DEBUG || process.env.pickleglass_DEBUG) {
+            this.config.enableDebugLogging = (process.env.LIVE_AGENT_DEBUG || process.env.pickleglass_DEBUG) === 'true';
         }
         
         if (this.env === 'production') {
@@ -84,7 +84,7 @@ class Config {
     }
     
     getUserConfigPath() {
-        const configDir = path.join(os.homedir(), '.pickleglass');
+        const configDir = path.join(os.homedir(), '.liveagent');
         if (!fs.existsSync(configDir)) {
             fs.mkdirSync(configDir, { recursive: true });
         }

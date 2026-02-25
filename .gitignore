@@ -95,8 +95,7 @@ out/
 .specstory/
 
 data/pickleglass.db
-pickleglass_web/backend/__pycache__/
-pickleglass_web/venv/
+data/liveagent.db
 
 # Node / JS
 node_modules/

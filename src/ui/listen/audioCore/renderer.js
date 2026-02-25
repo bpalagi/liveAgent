@@ -4,7 +4,7 @@ const params        = new URLSearchParams(window.location.search);
 const isListenView  = params.get('view') === 'listen';
 
 
-window.pickleGlass = {
+window.liveAgent = {
     startCapture: listenCapture.startCapture,
     stopCapture: listenCapture.stopCapture,
     isLinux: listenCapture.isLinux,
@@ -12,6 +12,9 @@ window.pickleGlass = {
     captureManualScreenshot: listenCapture.captureManualScreenshot,
     getCurrentScreenshot: listenCapture.getCurrentScreenshot,
 };
+
+// Backward-compat alias
+window.pickleGlass = window.liveAgent;
 
 
 window.api.renderer.onChangeListenCaptureState((_event, { status }) => {

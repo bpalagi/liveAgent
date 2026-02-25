@@ -136,9 +136,16 @@ contextBridge.exposeInMainWorld('api', {
     initializeEncryptionKey: () => ipcRenderer.invoke('initialize-encryption-key') // New for keychain
   },
 
-  // src/ui/app/PickleGlassApp.js
+  // src/ui/app/LiveAgentApp
   pickleGlassApp: {
     // Listeners
+    onClickThroughToggled: (callback) => ipcRenderer.on('click-through-toggled', callback),
+    removeOnClickThroughToggled: (callback) => ipcRenderer.removeListener('click-through-toggled', callback),
+    removeAllClickThroughListeners: () => ipcRenderer.removeAllListeners('click-through-toggled')
+  },
+
+  // Alias for neutral naming
+  liveAgentApp: {
     onClickThroughToggled: (callback) => ipcRenderer.on('click-through-toggled', callback),
     removeOnClickThroughToggled: (callback) => ipcRenderer.removeListener('click-through-toggled', callback),
     removeAllClickThroughListeners: () => ipcRenderer.removeAllListeners('click-through-toggled')

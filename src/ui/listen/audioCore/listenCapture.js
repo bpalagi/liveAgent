@@ -626,7 +626,10 @@ module.exports = {
 // Expose functions to global scope for external access (exact from renderer.js)
 if (typeof window !== 'undefined') {
     window.listenCapture = module.exports;
-    window.pickleGlass = window.pickleGlass || {};
-    window.pickleGlass.startCapture = startCapture;
-    window.pickleGlass.stopCapture = stopCapture;
+    window.liveAgent = window.liveAgent || {};
+    window.liveAgent.startCapture = startCapture;
+    window.liveAgent.stopCapture = stopCapture;
+
+    // Backward-compat alias
+    window.pickleGlass = window.liveAgent;
 } 

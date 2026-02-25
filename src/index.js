@@ -37,12 +37,13 @@ const ollamaModelRepository = require('./features/common/repositories/ollamaMode
 
 // Native deep link handling - cross-platform compatible
 let pendingDeepLinkUrl = null;
+const APP_PROTOCOL = 'liveagent';
 
 function setupProtocolHandling() {
     // Protocol registration - must be done before app is ready
     try {
-        if (!app.isDefaultProtocolClient('pickleglass')) {
-            const success = app.setAsDefaultProtocolClient('pickleglass');
+        if (!app.isDefaultProtocolClient(APP_PROTOCOL)) {
+            const success = app.setAsDefaultProtocolClient(APP_PROTOCOL);
             if (!success) {
                 console.warn('[Protocol] Failed to set as default protocol client - this may affect deep linking');
             }
@@ -59,7 +60,7 @@ function setupProtocolHandling() {
         
         // Search through all command line arguments for a valid protocol URL
         for (const arg of commandLine) {
-            if (arg && typeof arg === 'string' && arg.startsWith('pickleglass://')) {
+            if (arg && typeof arg === 'string' && arg.startsWith(`${APP_PROTOCOL}://`)) {
                 // Clean up the URL by removing problematic characters
                 const cleanUrl = arg.replace(/[\\₩]/g, '');
                 
@@ -86,7 +87,7 @@ function setupProtocolHandling() {
     app.on('open-url', (event, url) => {
         event.preventDefault();
         
-        if (!url || !url.startsWith('pickleglass://')) {
+        if (!url || !url.startsWith(`${APP_PROTOCOL}://`)) {
             console.warn('[Protocol] Invalid URL format:', url);
             return;
         }
@@ -126,7 +127,7 @@ function focusMainWindow() {
 
 if (process.platform === 'win32') {
     for (const arg of process.argv) {
-        if (arg && typeof arg === 'string' && arg.startsWith('pickleglass://')) {
+        if (arg && typeof arg === 'string' && arg.startsWith(`${APP_PROTOCOL}://`)) {
             // Clean up the URL by removing problematic characters (korean characters issue...)
             const cleanUrl = arg.replace(/[\\₩]/g, '');
             
@@ -302,7 +303,7 @@ app.on('activate', () => {
 async function handleCustomUrl(url) {
     try {
         // Validate and clean URL
-        if (!url || typeof url !== 'string' || !url.startsWith('pickleglass://')) {
+        if (!url || typeof url !== 'string' || !url.startsWith(`${APP_PROTOCOL}://`)) {
             console.error('[Custom URL] Invalid URL format:', url);
             return;
         }
@@ -436,7 +437,7 @@ async function initAutoUpdater() {
             dialog.showMessageBox({
                 type: 'info',
                 title: 'Application Update',
-                message: `A new version of PickleGlass (${releaseName}) has been downloaded. It will be installed the next time you launch the application.`,
+                message: `A new version of Live Agent (${releaseName}) has been downloaded. It will be installed the next time you launch the application.`,
                 buttons: ['Restart', 'Later']
             }).then(response => {
                 if (response.response === 0) {

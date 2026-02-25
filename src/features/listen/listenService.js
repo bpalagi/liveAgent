@@ -119,10 +119,10 @@ class ListenService {
 
     async handleTranscriptionComplete(speaker, text) {
         console.log(`[ListenService] Transcription complete: ${speaker} - ${text}`);
-        
-        // Save to database
-        await this.saveConversationTurn(speaker, text);
-        
+
+        // Save to database without blocking live analysis/render updates.
+        this.saveConversationTurn(speaker, text);
+
         // Add to summary service for analysis
         this.summaryService.addConversationTurn(speaker, text);
     }

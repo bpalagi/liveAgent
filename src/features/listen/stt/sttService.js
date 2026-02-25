@@ -3,12 +3,12 @@ const { spawn } = require('child_process');
 const { createSTT } = require('../../common/ai/factory');
 const modelStateService = require('../../common/services/modelStateService');
 
-const COMPLETION_DEBOUNCE_MS = 2000;
+const COMPLETION_DEBOUNCE_MS = 700;
 // Whisper emits complete sentences — use a shorter debounce for faster display
 // Reduced for more frequent updates with system audio
-const WHISPER_DEBOUNCE_MS = 300;
+const WHISPER_DEBOUNCE_MS = 150;
 // Minimum delay between sentence-based flushes to prevent fragmentation
-const SENTENCE_FLUSH_DELAY_MS = 200;
+const SENTENCE_FLUSH_DELAY_MS = 100;
 
 // ── Whisper noise / hallucination filter ─────────────────────────────────────────
 const WHISPER_NOISE_TAGS = [
@@ -763,7 +763,7 @@ class SttService {
 
         console.log('SystemAudioDump started with PID:', this.systemAudioProc.pid);
 
-        const CHUNK_DURATION = 0.1;
+        const CHUNK_DURATION = 0.05;
         const SAMPLE_RATE = 24000;
         const BYTES_PER_SAMPLE = 2;
         const CHANNELS = 2;
